@@ -641,8 +641,10 @@
   display: flex; flex-direction: column;
   position: relative;
 }
-.m-app button { font-family: inherit; color: inherit; border: none; background: none; padding: 0; cursor: pointer; }
-.m-app input { font-family: inherit; color: inherit; }
+/* :where() drops these resets to specificity-0 so per-component button
+   classes (.m-btn-primary, .m-preset, etc.) win on equal source-order. */
+.m-app :where(button) { font-family: inherit; color: inherit; border: none; background: none; padding: 0; cursor: pointer; }
+.m-app :where(input) { font-family: inherit; color: inherit; }
 
 /* Top bar */
 .m-topbar {
@@ -943,12 +945,14 @@
 /* Date preset chips (sheet) */
 .m-preset-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .m-preset {
+  display: inline-flex; align-items: center;
   height: 34px; padding: 0 14px;
   border-radius: 17px;
   background: var(--surface-2);
   border: 1px solid var(--line);
   font-size: 13px; color: var(--ink-2);
   font-weight: 500;
+  white-space: nowrap;
 }
 .m-preset.active { background: var(--accent); color: white; border-color: var(--accent); }
 
