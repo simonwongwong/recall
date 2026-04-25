@@ -649,7 +649,10 @@
 /* Top bar */
 .m-topbar {
   display: flex; align-items: center; justify-content: space-between;
-  height: 52px; padding: 0 16px;
+  /* Extend the surface bg up under the iOS status bar / dynamic island so
+     scrolled content doesn't bleed into the system chrome. */
+  height: calc(52px + env(safe-area-inset-top));
+  padding: env(safe-area-inset-top) 16px 0;
   background: var(--surface);
   border-bottom: 1px solid var(--line);
   flex-shrink: 0;
@@ -814,7 +817,10 @@
 /* Conversation header */
 .m-conv-head {
   display: flex; align-items: center; gap: 10px;
-  height: 56px; padding: 0 6px;
+  /* Same safe-area extension as .m-topbar so the thread view's header
+     covers the iOS status bar instead of letting messages scroll under it. */
+  height: calc(56px + env(safe-area-inset-top));
+  padding: env(safe-area-inset-top) 6px 0;
   background: var(--surface);
   border-bottom: 1px solid var(--line);
   flex-shrink: 0;
