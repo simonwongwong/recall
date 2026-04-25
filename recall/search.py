@@ -340,16 +340,16 @@ def attachments_for(message_rowids: list[int]) -> dict[int, list[dict[str, Any]]
     return out
 
 
-def attachment_path(att_rowid: int) -> tuple[str, str | None] | None:
-    """Look up the on-disk path + mime_type for an attachment ROWID."""
+def attachment_path(att_rowid: int) -> tuple[str, str | None, bool] | None:
+    """Look up the on-disk path + mime_type + is_sticker for an attachment ROWID."""
     src = dbmod.open_chat_db()
     row = src.execute(
-        "SELECT filename, mime_type FROM attachment WHERE ROWID = ?",
+        "SELECT filename, mime_type, is_sticker FROM attachment WHERE ROWID = ?",
         (att_rowid,),
     ).fetchone()
     if not row or not row["filename"]:
         return None
-    return row["filename"], row["mime_type"]
+    return row["filename"], row["mime_type"], bool(row["is_sticker"])
 
 
 def conversation_window(rowid: int, *, before: int = 5, after: int = 5) -> list[SearchHit]:

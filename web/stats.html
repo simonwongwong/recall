@@ -13,13 +13,58 @@
   .stats-wrap { max-width: 1080px; margin: 0 auto; padding: 28px 28px 80px; }
   .stats-back { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-3); text-decoration: none; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.02em; }
   .stats-back:hover { color: var(--ink); }
-  .stats-h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.015em; margin: 14px 0 4px; }
+  .stats-h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.015em; margin: 14px 0 4px; display: flex; align-items: center; gap: 12px; }
   .stats-sub { font-family: var(--font-mono); font-size: 12px; color: var(--ink-3); margin-bottom: 28px; }
+
+  /* Chat picker — sits next to the Stats h1 */
+  .chat-picker { position: relative; }
+  .chat-picker-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 12px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--ink-2);
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .chat-picker-btn:hover { background: white; border-color: var(--line-2); color: var(--ink); }
+  .chat-picker-btn.active { background: var(--accent-2); border-color: var(--accent); color: var(--accent-ink); }
+  .chat-picker-pop {
+    position: absolute; top: calc(100% + 6px); left: 0;
+    width: 320px; max-height: 420px;
+    background: white;
+    border: 1px solid var(--line-2);
+    border-radius: 10px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+    z-index: 50;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .chat-picker-pop input {
+    border: none; outline: none; background: transparent;
+    padding: 12px 14px;
+    font: inherit; font-size: 13px;
+    border-bottom: 1px solid var(--line);
+  }
+  .chat-picker-list { flex: 1; min-height: 0; overflow-y: auto; padding: 4px; }
+  .chat-picker-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 10px; border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px; color: var(--ink-2);
+  }
+  .chat-picker-item:hover { background: var(--accent-2); color: var(--accent-ink); }
+  .chat-picker-item.selected { background: var(--accent-2); color: var(--accent-ink); font-weight: 500; }
+  .chat-picker-item .meta { margin-left: auto; font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-4); }
+  .chat-picker-item.selected .meta { color: var(--accent-ink); opacity: 0.7; }
   .grid { display: grid; gap: 14px; }
   .grid-4 { grid-template-columns: repeat(4, 1fr); }
   .grid-3 { grid-template-columns: repeat(3, 1fr); }
   .grid-2 { grid-template-columns: 1fr 1fr; }
-  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; transition: border 0.12s; }
+  a.card:hover { border-color: var(--accent); }
   .card h3 { margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-4); }
   .card .big { font-size: 26px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.15; font-variant-numeric: tabular-nums; }
   .card .sub { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); margin-top: 4px; }
@@ -56,6 +101,117 @@
   .pager-btn:hover:not(:disabled) { background: white; color: var(--ink); border-color: var(--line-2); }
   .pager-btn:disabled { opacity: 0.4; cursor: default; }
   .pager-status { font-family: var(--font-mono); font-size: 11px; color: var(--ink-4); align-self: center; }
+
+  /* Sticker grid */
+  .sticker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+  .sticker-card {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    transition: border 0.12s;
+  }
+  .sticker-card:hover { border-color: var(--line-2); }
+  .sticker-img {
+    width: 96px; height: 96px;
+    object-fit: contain;
+    /* No background or border — transparent regions inherit the card's surface. */
+  }
+  .sticker-meta {
+    font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-3);
+    text-align: center; line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+  }
+  .sticker-meta strong { color: var(--ink); font-weight: 600; }
+
+  /* Emoji grid */
+  .emoji-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px 16px; }
+  .emoji-row {
+    display: grid;
+    grid-template-columns: 28px 1fr 70px;
+    gap: 8px; align-items: center;
+    padding: 4px 0;
+    font-size: 13px;
+  }
+  .emoji-row .glyph {
+    font-size: 22px; line-height: 1; text-align: center;
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+  }
+  .emoji-row .count { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); text-align: right; font-variant-numeric: tabular-nums; }
+  .emoji-row .bar-track { height: 6px; }
+
+  /* Tapback strip */
+  .tapback-strip { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+  .tapback-card {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px 8px;
+    text-align: center;
+  }
+  .tapback-emoji { font-size: 26px; line-height: 1.3; font-family: "Apple Color Emoji", sans-serif; }
+  .tapback-label { font-family: var(--font-mono); font-size: 9.5px; color: var(--ink-4); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 4px; }
+  .tapback-uses { font-size: 18px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .tapback-split { font-family: var(--font-mono); font-size: 10px; color: var(--ink-3); margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+  /* HTML bar charts (VBarChart + SplitBarChart) */
+  .vchart {
+    display: flex; gap: 10px;
+    width: 100%;
+  }
+  .vchart-yaxis {
+    width: 32px; position: relative; flex-shrink: 0;
+  }
+  .vchart-yaxis span {
+    position: absolute; right: 0;
+    font-family: var(--font-mono); font-size: 10px; color: var(--ink-4);
+    font-variant-numeric: tabular-nums;
+    line-height: 12px;
+  }
+  .vchart-area {
+    flex: 1; min-width: 0;
+    display: flex; flex-direction: column;
+    position: relative;
+  }
+  .vchart-grid {
+    position: absolute; inset: 0 0 22px 0;
+    pointer-events: none;
+  }
+  .vchart-gridline {
+    position: absolute; left: 0; right: 0;
+    border-top: 1px dashed var(--line);
+    height: 0;
+  }
+  .vchart-bars {
+    flex: 1; min-height: 0;
+    display: flex; align-items: flex-end; gap: 4px;
+    border-bottom: 1px solid var(--line);
+    position: relative;
+  }
+  .vchart-col {
+    flex: 1; min-width: 0; height: 100%;
+    display: flex; flex-direction: column; justify-content: flex-end;
+  }
+  .vchart-stack {
+    width: 100%;
+    display: flex; flex-direction: column-reverse;
+    border-radius: 3px 3px 0 0;
+    overflow: hidden;
+  }
+  .vchart-bar {
+    width: 100%;
+    transition: opacity 0.12s;
+  }
+  .vchart-col:hover .vchart-bar { opacity: 0.85; }
+  .vchart-xaxis {
+    display: flex; gap: 4px; padding-top: 6px; height: 16px;
+    font-family: var(--font-mono); font-size: 10px; color: var(--ink-4);
+  }
+  .vchart-xaxis span {
+    flex: 1; min-width: 0; text-align: center;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
 
   /* Year × Month heatmap */
   .heatmap { display: flex; flex-direction: column; gap: 4px; font-family: var(--font-mono); }
@@ -132,49 +288,41 @@ function fmtTick(v) {
   return String(v);
 }
 
-// ── SVG bar chart (categorical, fixed pixel sizing so labels stay legible) ─
-function VBarChart({ data, labels, height = 180, accent = "var(--accent)" }) {
-  const barW = 30;
-  const gap = 8;
-  const padL = 36;
-  const padR = 8;
-  const padTop = 12;
-  const padBottom = 22;
-  const w = padL + padR + data.length * barW + (data.length - 1) * gap;
-  const innerH = height - padTop - padBottom;
-  const innerW = w - padL - padR;
+// ── HTML bar chart (categorical) ─────────────────────────────
+// HTML+flexbox so the chart fills its container's width fully and labels
+// stay at a fixed pixel size regardless of container width.
+function VBarChart({ data, labels, height = 220, accent = "var(--accent)" }) {
   const scale = niceScale(Math.max(1, ...data), 4);
-  const y = v => padTop + innerH - (v / scale.max) * innerH;
   return (
-    <svg viewBox={`0 0 ${w} ${height}`} width="100%" height={height}
-         preserveAspectRatio="xMidYMid meet"
-         style={{ display: "block" }}>
-      {scale.ticks.map((t, i) => (
-        <g key={i}>
-          <line x1={padL} x2={w - padR} y1={y(t)} y2={y(t)} stroke="var(--line)" strokeDasharray="2 4"/>
-          <text x={padL - 6} y={y(t) + 3} fill="var(--ink-4)"
-                fontFamily="var(--font-mono)" fontSize="10" textAnchor="end">
-            {fmtTick(t)}
-          </text>
-        </g>
-      ))}
-      {data.map((v, i) => {
-        const h = (v / scale.max) * innerH;
-        const x = padL + i * (barW + gap);
-        return (
-          <g key={i}>
-            <rect x={x} y={padTop + innerH - h} width={barW} height={h}
-                  fill={accent} rx={2}/>
-            {labels && labels[i] != null && (
-              <text x={x + barW / 2} y={height - 6} fill="var(--ink-4)"
-                    fontFamily="var(--font-mono)" fontSize="10" textAnchor="middle">
-                {labels[i]}
-              </text>
-            )}
-          </g>
-        );
-      })}
-    </svg>
+    <div className="vchart" style={{ height }}>
+      <div className="vchart-yaxis">
+        {scale.ticks.map((t, i) => (
+          <span key={i} style={{ bottom: `calc(${(t / scale.max) * 100}% - 6px)` }}>{fmtTick(t)}</span>
+        ))}
+      </div>
+      <div className="vchart-area">
+        <div className="vchart-grid">
+          {scale.ticks.map((t, i) => (
+            <div key={i} className="vchart-gridline" style={{ bottom: `${(t / scale.max) * 100}%` }}/>
+          ))}
+        </div>
+        <div className="vchart-bars">
+          {data.map((v, i) => (
+            <div key={i} className="vchart-col">
+              <div className="vchart-bar" style={{
+                height: `${(v / scale.max) * 100}%`,
+                background: accent,
+              }} title={`${labels?.[i] ?? i}: ${fmtN(v)}`}/>
+            </div>
+          ))}
+        </div>
+        {labels && (
+          <div className="vchart-xaxis">
+            {labels.map((l, i) => <span key={i}>{l}</span>)}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -218,52 +366,48 @@ function TimelineChart({ buckets, height = 220, xLabelEvery = "auto" }) {
   );
 }
 
-// ── Split bar chart for hour/weekday/month-of-year ───────────
-function SplitBarChart({ data, labels, height = 180 }) {
-  const barW = 30;
-  const gap = 8;
-  const padL = 40;
-  const padR = 8;
-  const padTop = 12;
-  const padBottom = 22;
-  const w = padL + padR + data.length * barW + (data.length - 1) * gap;
-  const innerH = height - padTop - padBottom;
+// ── HTML solid bar chart (single color; me/them in tooltip) ──
+// Used where the split is interesting context but visual stacking adds noise
+// (e.g. by year, by calendar month).
+function SplitBarChart({ data, labels, height = 220 }) {
   const scale = niceScale(Math.max(1, ...data.map(d => d.n)), 4);
-  const y = v => padTop + innerH - (v / scale.max) * innerH;
   return (
-    <svg viewBox={`0 0 ${w} ${height}`} width="100%" height={height}
-         preserveAspectRatio="xMidYMid meet" style={{ display: "block" }}>
-      {scale.ticks.map((t, i) => (
-        <g key={i}>
-          <line x1={padL} x2={w - padR} y1={y(t)} y2={y(t)} stroke="var(--line)" strokeDasharray="2 4"/>
-          <text x={padL - 6} y={y(t) + 3} fill="var(--ink-4)"
-                fontFamily="var(--font-mono)" fontSize="10" textAnchor="end">
-            {fmtTick(t)}
-          </text>
-        </g>
-      ))}
-      {data.map((d, i) => {
-        const total = d.n;
-        const me = d.me || 0;
-        const them = total - me;
-        const totH = (total / scale.max) * innerH;
-        const themH = (them / scale.max) * innerH;
-        const meH = (me / scale.max) * innerH;
-        const x = padL + i * (barW + gap);
-        return (
-          <g key={i}>
-            <rect x={x} y={padTop + innerH - totH} width={barW} height={themH} fill="var(--bubble-in)" rx={2}/>
-            <rect x={x} y={padTop + innerH - totH + themH} width={barW} height={meH} fill="var(--accent)" rx={2}/>
-            {labels && labels[i] != null && (
-              <text x={x + barW / 2} y={height - 6} fill="var(--ink-4)"
-                    fontFamily="var(--font-mono)" fontSize="10" textAnchor="middle">
-                {labels[i]}
-              </text>
-            )}
-          </g>
-        );
-      })}
-    </svg>
+    <div className="vchart" style={{ height }}>
+      <div className="vchart-yaxis">
+        {scale.ticks.map((t, i) => (
+          <span key={i} style={{ bottom: `calc(${(t / scale.max) * 100}% - 6px)` }}>{fmtTick(t)}</span>
+        ))}
+      </div>
+      <div className="vchart-area">
+        <div className="vchart-grid">
+          {scale.ticks.map((t, i) => (
+            <div key={i} className="vchart-gridline" style={{ bottom: `${(t / scale.max) * 100}%` }}/>
+          ))}
+        </div>
+        <div className="vchart-bars">
+          {data.map((d, i) => {
+            const total = d.n;
+            const me    = d.me || 0;
+            const them  = total - me;
+            return (
+              <div key={i} className="vchart-col"
+                   title={`${labels?.[i] ?? i}: ${fmtN(total)} total · ${fmtN(me)} sent · ${fmtN(them)} received`}>
+                <div className="vchart-bar" style={{
+                  height: `${(total / scale.max) * 100}%`,
+                  background: "var(--accent)",
+                  borderRadius: "3px 3px 0 0",
+                }}/>
+              </div>
+            );
+          })}
+        </div>
+        {labels && (
+          <div className="vchart-xaxis">
+            {labels.map((l, i) => <span key={i}>{l}</span>)}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -334,16 +478,22 @@ function Pager({ offset, limit, total, onChange, loading }) {
   );
 }
 
+// ── Chat scope context (shared chat_ids filter) ──────────────
+const ChatScope = React.createContext({ chatIds: [], scopeLabel: "All chats" });
+
 // ── Hooks for paginated sections ─────────────────────────────
 function useStatsList(path, limit, extraQuery) {
+  const { chatIds } = React.useContext(ChatScope);
   const [offset, setOffset] = useState(0);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const chatIdsKey = chatIds.join(",");
   const url = useMemo(() => {
     const u = new URLSearchParams({ limit, offset });
     Object.entries(extraQuery || {}).forEach(([k, v]) => u.set(k, v));
+    if (chatIdsKey) u.set("chat_ids", chatIdsKey);
     return `${path}?${u}`;
-  }, [path, limit, offset, JSON.stringify(extraQuery)]);
+  }, [path, limit, offset, JSON.stringify(extraQuery), chatIdsKey]);
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -351,9 +501,82 @@ function useStatsList(path, limit, extraQuery) {
       .catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [url]);
-  // Reset offset when extraQuery changes (e.g. mode toggle)
-  useEffect(() => { setOffset(0); }, [JSON.stringify(extraQuery)]);
+  // Reset offset when filter scope or extra query changes.
+  useEffect(() => { setOffset(0); }, [JSON.stringify(extraQuery), chatIdsKey]);
   return { data, offset, setOffset, loading, limit };
+}
+
+// ── Chat picker ──────────────────────────────────────────────
+function ChatPicker({ scope, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [people, setPeople] = useState([]);
+  const [filter, setFilter] = useState("");
+  const ref = React.useRef(null);
+
+  useEffect(() => {
+    if (!open || people.length) return;
+    fetch("/people?limit=2000").then(r => r.json()).then(d => setPeople(d.people || []));
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const f = filter.trim().toLowerCase();
+  const filtered = f
+    ? people.filter(p => (p.name || "").toLowerCase().includes(f))
+    : people.slice(0, 80);
+
+  const isAll = scope.chatIds.length === 0;
+
+  return (
+    <div className="chat-picker" ref={ref}>
+      <button className={"chat-picker-btn" + (isAll ? "" : " active")}
+              onClick={() => setOpen(o => !o)}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.4-.7L3 21l1.8-5.6A8.4 8.4 0 1 1 21 11.5z"/>
+        </svg>
+        <span>{scope.scopeLabel}</span>
+        <span style={{ opacity: 0.6 }}>▾</span>
+      </button>
+      {open && (
+        <div className="chat-picker-pop">
+          <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Filter…" autoFocus/>
+          <div className="chat-picker-list">
+            <div className={"chat-picker-item" + (isAll ? " selected" : "")}
+                 onClick={() => { onChange({ chatIds: [], scopeLabel: "All chats" }); setOpen(false); }}>
+              <span>All chats</span>
+            </div>
+            {filtered.map(p => {
+              const selected = scope.chatIds.length === p.chat_ids.length
+                && scope.chatIds.every(id => p.chat_ids.includes(id));
+              const label = p.is_group ? `${p.name} · group` : p.name;
+              return (
+                <div key={p.chat_ids.join(",")}
+                     className={"chat-picker-item" + (selected ? " selected" : "")}
+                     onClick={() => {
+                       onChange({
+                         chatIds: p.chat_ids,
+                         scopeLabel: label,
+                         identifiers: p.identifiers || [],
+                         isGroup: !!p.is_group,
+                       });
+                       setOpen(false);
+                     }}>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+                  <span className="meta">{(p.message_count || 0).toLocaleString()}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Top chats section (paginated) ────────────────────────────
@@ -436,11 +659,7 @@ function BusiestDaysSection({ initial }) {
     <div className="section">
       <h2 className="section-title">
         busiest single days
-        <span className="seg">
-          <button className={mode === "all" ? "active" : ""} onClick={() => setMode("all")}>both</button>
-          <button className={mode === "me" ? "active" : ""} onClick={() => setMode("me")}>sent</button>
-          <button className={mode === "them" ? "active" : ""} onClick={() => setMode("them")}>received</button>
-        </span>
+        <ModeToggle mode={mode} onChange={setMode}/>
       </h2>
       <div className="chart-card">
         <div className="row-list">
@@ -460,14 +679,135 @@ function BusiestDaysSection({ initial }) {
   );
 }
 
-// ── Longest messages section (paginated) ─────────────────────
+// Reusable mode toggle (both / sent / received)
+function ModeToggle({ mode, onChange }) {
+  return (
+    <span className="seg">
+      <button className={mode === "all"  ? "active" : ""} onClick={() => onChange("all")}>both</button>
+      <button className={mode === "me"   ? "active" : ""} onClick={() => onChange("me")}>sent</button>
+      <button className={mode === "them" ? "active" : ""} onClick={() => onChange("them")}>received</button>
+    </span>
+  );
+}
+
+// ── Stickers section (paginated, with thumbnails) ────────────
+function StickersSection({ initial }) {
+  const [mode, setMode] = useState("all");
+  const list = useStatsList("/stats/stickers", 12, { mode });
+  const data = list.data || initial;
+  const items = data.items || [];
+  const primary = mode === "me" ? "sent" : mode === "them" ? "received" : "uses";
+  return (
+    <div className="section">
+      <h2 className="section-title">
+        most-used stickers · {fmtN(data.total || 0)} unique
+        <ModeToggle mode={mode} onChange={setMode}/>
+      </h2>
+      <div className="chart-card">
+        {items.length === 0 && <div className="loading" style={{ padding: 24 }}>no stickers in this slice</div>}
+        <div className="sticker-grid">
+          {items.map(s => (
+            <div key={s.sticker_id} className="sticker-card" title={s.sticker_id}>
+              <img className="sticker-img" src={`/attachment/${s.att_rowid}`} alt="sticker" loading="lazy"/>
+              <div className="sticker-meta">
+                <strong>{fmtN(s[primary])}</strong> {primary === "uses" ? "uses" : primary}
+                <br/>
+                <span style={{ color: "var(--accent)" }}>↑ {fmtN(s.sent)}</span>
+                {"  ·  "}
+                <span style={{ color: "var(--ink-2)" }}>↓ {fmtN(s.received)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <Pager {...list} total={data.total || 0} onChange={list.setOffset}/>
+      </div>
+    </div>
+  );
+}
+
+// ── Emojis section (paginated, with sent/received split bars) ─
+function EmojisSection({ initial }) {
+  const [mode, setMode] = useState("all");
+  const list = useStatsList("/stats/emojis", 24, { mode });
+  const data = list.data || initial;
+  const items = data.items || [];
+  const primary = mode === "me" ? "sent" : mode === "them" ? "received" : "uses";
+  const peak = items[0]?.[primary] || 1;
+  return (
+    <div className="section">
+      <h2 className="section-title">
+        most-used emoji · {fmtN(data.total || 0)} unique
+        <ModeToggle mode={mode} onChange={setMode}/>
+        <span className="legend">
+          <span><span className="legend-dot" style={{ background: "var(--accent)" }}/>sent</span>
+          <span><span className="legend-dot" style={{ background: "var(--bubble-in)" }}/>received</span>
+        </span>
+      </h2>
+      <div className="chart-card">
+        <div className="emoji-grid">
+          {items.map(e => (
+            <div key={e.emoji} className="emoji-row" title={`${e.codepoint} · ${e.sent} sent / ${e.received} received`}>
+              <span className="glyph">{e.emoji}</span>
+              <div className="bar-track">
+                <div className="bar-fill split-them" style={{ width: ((e.uses / peak) * 100) + "%" }}/>
+                <div className="bar-fill split-me"   style={{ width: ((e.sent / peak) * 100) + "%" }}/>
+              </div>
+              <div className="count">{fmtN(e[primary])}</div>
+            </div>
+          ))}
+        </div>
+        <Pager {...list} total={data.total || 0} onChange={list.setOffset}/>
+      </div>
+    </div>
+  );
+}
+
+// ── Tapbacks (the 6 reaction types) ──────────────────────────
+function TapbacksSection({ initial }) {
+  const items = (initial?.items || []);
+  return (
+    <div className="section">
+      <h2 className="section-title">
+        tapback reactions
+        <span className="legend">
+          <span title="tapbacks you added to anyone's message">↑ you sent</span>
+          <span title="tapbacks others added to YOUR messages (strict)">↓ to you</span>
+          <span title="tapbacks between other people in group chats">⇄ between others</span>
+        </span>
+      </h2>
+      <div className="chart-card">
+        <div className="tapback-strip">
+          {items.map(t => (
+            <div key={t.type} className="tapback-card">
+              <div className="tapback-emoji">{t.emoji}</div>
+              <div className="tapback-label">{t.label}</div>
+              <div className="tapback-uses">{fmtN(t.uses)}</div>
+              <div className="tapback-split">
+                ↑ {fmtN(t.sent)}
+                {" · "}
+                ↓ {fmtN(t.received)}
+                {t.by_others ? <>{" · "}⇄ {fmtN(t.by_others)}</> : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Longest messages section (paginated, with sent/received toggle) ───
 function LongestMessagesSection({ initial }) {
-  const list = useStatsList("/stats/longest", 3);
+  const [mode, setMode] = useState("all");
+  const list = useStatsList("/stats/longest", 3, { mode });
   const data = list.data || initial;
   const items = data.items || [];
   return (
     <div className="section">
-      <h2 className="section-title">your longest messages</h2>
+      <h2 className="section-title">
+        longest messages
+        <ModeToggle mode={mode} onChange={setMode}/>
+      </h2>
       {items.map(m => (
         <div key={m.rowid} className="quote-card">
           <div className="quote-text">{m.text}</div>
@@ -486,13 +826,59 @@ function LongestMessagesSection({ initial }) {
 function App() {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
+  // Initial scope from URL — full label/identifiers fill in once /people loads.
+  const initialChatIds = (new URLSearchParams(window.location.search).get("chat_ids") || "")
+    .split(",").map(s => s.trim()).filter(Boolean).map(Number);
+  const [scope, setScope] = useState(
+    initialChatIds.length
+      ? { chatIds: initialChatIds, scopeLabel: "Loading…", identifiers: [], isGroup: false }
+      : { chatIds: [], scopeLabel: "All chats", identifiers: [], isGroup: false }
+  );
+  const scopeKey = scope.chatIds.join(",");
 
+  // Resolve a deep-linked chat scope to a full label by hitting /people once.
   useEffect(() => {
-    fetch("/stats").then(r => r.json()).then(setData).catch(e => setErr(String(e)));
+    if (!initialChatIds.length || scope.scopeLabel !== "Loading…") return;
+    fetch("/people?limit=2000").then(r => r.json()).then(d => {
+      const match = (d.people || []).find(p =>
+        p.chat_ids.length === initialChatIds.length
+        && initialChatIds.every(id => p.chat_ids.includes(id))
+      );
+      if (match) {
+        setScope({
+          chatIds: match.chat_ids,
+          scopeLabel: match.is_group ? `${match.name} · group` : match.name,
+          identifiers: match.identifiers || [],
+          isGroup: !!match.is_group,
+        });
+      } else {
+        setScope(s => ({ ...s, scopeLabel: `${initialChatIds.length} chat${initialChatIds.length !== 1 ? "s" : ""}` }));
+      }
+    });
   }, []);
 
+  // Mirror scope into the URL so refresh/share keeps the chat selection.
+  useEffect(() => {
+    const u = new URL(window.location);
+    if (scopeKey) u.searchParams.set("chat_ids", scopeKey);
+    else u.searchParams.delete("chat_ids");
+    window.history.replaceState({}, "", u);
+  }, [scopeKey]);
+
+  useEffect(() => {
+    setData(null);
+    const u = scopeKey ? `/stats?chat_ids=${scopeKey}` : "/stats";
+    fetch(u).then(r => r.json()).then(setData).catch(e => setErr(String(e)));
+  }, [scopeKey]);
+
   if (err) return <div className="loading">{err}</div>;
-  if (!data) return <div className="loading">loading stats…</div>;
+  if (!data) return (
+    <>
+      <a href="/" className="stats-back">← back to search</a>
+      <h1 className="stats-h1">Stats <ChatPicker scope={scope} onChange={setScope}/></h1>
+      <div className="loading">loading stats…</div>
+    </>
+  );
 
   const ov = data.overview;
   const span = daysBetween(ov.first_unix, ov.last_unix);
@@ -504,9 +890,11 @@ function App() {
   const peakMonth = [...data.by_month_of_year].sort((a, b) => b.n - a.n)[0];
 
   return (
-    <>
+    <ChatScope.Provider value={scope}>
       <a href="/" className="stats-back">← back to search</a>
-      <h1 className="stats-h1">Stats</h1>
+      <h1 className="stats-h1">
+        Stats <ChatPicker scope={scope} onChange={setScope}/>
+      </h1>
       <div className="stats-sub">
         {fmtDate(ov.first_unix)} → {fmtDate(ov.last_unix)} · {fmtN(span)} days
       </div>
@@ -518,21 +906,63 @@ function App() {
           <div className="big">{fmtN(ov.total_messages)}</div>
           <div className="sub">{fmtN(ov.from_me)} sent · {fmtN(ov.received)} received</div>
         </div>
-        <div className="card">
-          <h3>conversations</h3>
-          <div className="big">{fmtN(ov.total_chats)}</div>
-          <div className="sub">{fmtN(ov.one_on_one_chats)} 1:1 · {fmtN(ov.group_chats)} groups</div>
-        </div>
+        {scope.chatIds.length === 0 ? (
+          <div className="card">
+            <h3>conversations</h3>
+            <div className="big">{fmtN(ov.total_chats)}</div>
+            <div className="sub">{fmtN(ov.one_on_one_chats)} 1:1 · {fmtN(ov.group_chats)} groups</div>
+          </div>
+        ) : scope.isGroup ? (
+          <div className="card">
+            <h3>group chat</h3>
+            <div className="big">{scope.scopeLabel.replace(/ · group$/, "")}</div>
+            <div className="sub" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {scope.identifiers[0]}
+            </div>
+          </div>
+        ) : (
+          <div className="card">
+            <h3>contact points</h3>
+            <div className="big">{(scope.identifiers || []).length}</div>
+            <div className="sub" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                 title={(scope.identifiers || []).join(" · ")}>
+              {(scope.identifiers || []).join(" · ")}
+            </div>
+          </div>
+        )}
         <div className="card">
           <h3>avg / day</h3>
           <div className="big">{fmtN(avgPerDay)}</div>
           <div className="sub">{mePct}% are from you</div>
         </div>
-        <div className="card">
-          <h3>longest streak</h3>
-          <div className="big">{fmtN(data.streaks.longest)}d</div>
-          <div className="sub">{data.streaks.longest_start} → {data.streaks.longest_end}</div>
-        </div>
+        {(() => {
+          const s = data.streaks;
+          const start = s.longest_start;
+          const end = s.longest_end;
+          // Link to the search page filtered to this streak's date range
+          // (and the current chat scope, if any), oldest first so the very
+          // first message of the streak is the auto-selected hit.
+          const u = new URLSearchParams();
+          if (start) u.set("since", start);
+          if (end)   {
+            // Use the day after `end` since `until` is exclusive in /search.
+            const next = new Date(end + "T00:00:00");
+            next.setDate(next.getDate() + 1);
+            u.set("until", next.toISOString().slice(0, 10));
+          }
+          if (scope.chatIds.length) u.set("chat_ids", scope.chatIds.join(","));
+          u.set("order", "oldest");
+          const href = `/?${u}`;
+          return (
+            <a className="card" href={href} target="_blank" rel="noreferrer"
+               style={{ display: "block", color: "inherit", textDecoration: "none", cursor: "pointer" }}
+               title="Open the first message of the streak in search">
+              <h3>longest streak</h3>
+              <div className="big">{fmtN(s.longest)}d <span style={{ fontSize: 14, color: "var(--ink-4)", fontWeight: 400 }}>↗</span></div>
+              <div className="sub">{start} → {end}</div>
+            </a>
+          );
+        })()}
       </div>
 
       {/* Year-month timeline */}
@@ -578,8 +1008,8 @@ function App() {
         <div>
           <h2 className="section-title">by hour of day · peak {peakHour?.h}:00</h2>
           <div className="chart-card">
-            <VBarChart
-              data={data.by_hour.map(h => h.n)}
+            <SplitBarChart
+              data={data.by_hour}
               labels={data.by_hour.map(h => h.h % 3 === 0 ? `${h.h}` : "")}
             />
           </div>
@@ -587,16 +1017,16 @@ function App() {
         <div>
           <h2 className="section-title">by weekday · busiest {topWeekday?.label}</h2>
           <div className="chart-card">
-            <VBarChart
-              data={data.by_weekday.map(d => d.n)}
+            <SplitBarChart
+              data={data.by_weekday}
               labels={data.by_weekday.map(d => d.label)}
             />
           </div>
         </div>
       </div>
 
-      <TopChatsSection initial={data.top_chats}/>
-      <LopsidedSection initial={data.lopsided}/>
+      {data.top_chats && <TopChatsSection initial={data.top_chats}/>}
+      {data.lopsided && <LopsidedSection initial={data.lopsided}/>}
       <BusiestDaysSection initial={{ items: data.busiest_days?.items || [], total: data.busiest_days?.total || 0 }}/>
 
       {/* First messages */}
@@ -617,12 +1047,17 @@ function App() {
         </div>
       </div>
 
+      <TapbacksSection initial={data.tapbacks}/>
+      <EmojisSection initial={data.emojis}/>
+      <StickersSection initial={data.stickers}/>
+
       <LongestMessagesSection initial={data.longest_messages}/>
 
       <div className="section" style={{ textAlign: "center", color: "var(--ink-4)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
-        {fmtN(ov.reactions)} reactions · {fmtN(ov.with_attachments)} messages with attachments · {fmtN(ov.total_handles)} unique handles
+        {fmtN(ov.reactions)} reactions · {fmtN(ov.with_attachments)} messages with attachments
+        {ov.total_handles != null && <> · {fmtN(ov.total_handles)} unique handles</>}
       </div>
-    </>
+    </ChatScope.Provider>
   );
 }
 

@@ -65,6 +65,8 @@ CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_rowid, date_unix);
 CREATE INDEX IF NOT EXISTS idx_messages_handle ON messages(handle_rowid, date_unix);
 CREATE INDEX IF NOT EXISTS idx_messages_date ON messages(date_unix);
 CREATE INDEX IF NOT EXISTS idx_messages_reaction ON messages(is_reaction);
+-- Lets the tapback "was the original mine?" join run in O(log n).
+CREATE INDEX IF NOT EXISTS idx_messages_guid ON messages(guid);
 
 -- Standalone FTS5 (not external-content). Slightly more storage but simpler updates.
 CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(

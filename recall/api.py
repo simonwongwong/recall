@@ -40,6 +40,13 @@ def _int(v: str | None) -> int | None:
     return int(v) if v not in (None, "") else None
 
 
+def _csv_ints(v: str | None) -> list[int] | None:
+    if not v:
+        return None
+    out = [int(x) for x in v.split(",") if x.strip().lstrip("-").isdigit()]
+    return out or None
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # quieter log
         sys.stderr.write(f"[{self.log_date_time_string()}] {fmt % args}\n")
@@ -161,22 +168,35 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if url.path == "/stats":
-            self._send_json(200, stats_mod.all_stats())
+            chat_ids = _csv_ints(qs.get("chat_ids"))
+            self._send_json(200, stats_mod.all_stats(chat_ids))
             return
 
         if url.path.startswith("/stats/"):
             section = url.path[len("/stats/"):]
             limit = _int(qs.get("limit")) or 20
             offset = _int(qs.get("offset")) or 0
+            chat_ids = _csv_ints(qs.get("chat_ids"))
             conn = dbmod.open_index_db(read_only=True)
+            # top-chats and lopsided are cross-chat — filter ignored.
             if section == "top-chats":
                 self._send_json(200, stats_mod.top_chats(conn, limit, offset)); return
             if section == "busiest-days":
-                self._send_json(200, stats_mod.busiest_days(conn, limit, offset, qs.get("mode") or "all")); return
+                self._send_json(200, stats_mod.busiest_days(conn, limit, offset,
+                    qs.get("mode") or "all", chat_ids)); return
             if section == "lopsided":
                 self._send_json(200, stats_mod.lopsided(conn, limit, offset)); return
             if section == "longest":
-                self._send_json(200, stats_mod.longest_messages(conn, limit, offset)); return
+                self._send_json(200, stats_mod.longest_messages(conn, limit, offset, chat_ids,
+                    qs.get("mode") or "all")); return
+            if section == "stickers":
+                self._send_json(200, stats_mod.sticker_stats(limit, offset, chat_ids,
+                    qs.get("mode") or "all")); return
+            if section == "emojis":
+                self._send_json(200, stats_mod.emoji_stats(limit, offset, chat_ids,
+                    qs.get("mode") or "all")); return
+            if section == "tapbacks":
+                self._send_json(200, stats_mod.tapback_stats(chat_ids)); return
             self._send_json(404, {"error": "unknown stats section"}); return
 
         if url.path.startswith("/attachment/"):
@@ -215,29 +235,38 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(200, {"ok": True, "url": url})
 
     def _serve_attachment(self, att_rowid: int) -> None:
-        """Stream an attachment file. HEIC is transcoded to JPEG via macOS sips."""
+        """Stream an attachment file. HEIC is transcoded — to PNG when the source
+        likely has transparency (stickers always; explicitly typed HEIF too), to
+        JPEG otherwise (smaller for photos)."""
         info = search.attachment_path(att_rowid)
         if info is None:
             self._send_json(404, {"error": "no such attachment"})
             return
-        raw_path, mime = info
+        raw_path, mime, is_sticker = info
         path = os.path.expanduser(raw_path or "")
         if not path or not os.path.isfile(path):
             self._send_json(404, {"error": "file not on disk", "path": raw_path})
             return
 
-        # Browsers don't render HEIC natively → transcode to JPEG.
-        is_heic = (mime or "").lower() in ("image/heic", "image/heic-sequence", "image/heif")
+        # Browsers don't render HEIC natively → transcode.
+        mime_lc = (mime or "").lower()
+        is_heic = mime_lc in ("image/heic", "image/heic-sequence", "image/heif")
         if not is_heic and path.lower().endswith((".heic", ".heif")):
             is_heic = True
 
         if is_heic:
+            # Stickers (and HEIF in general) carry alpha → use PNG to preserve it.
+            # Photos default to JPEG to keep size down.
+            use_png = is_sticker or mime_lc == "image/heif"
+            target_fmt, ctype, suffix = (
+                ("png",  "image/png",  ".png")  if use_png else
+                ("jpeg", "image/jpeg", ".jpg")
+            )
             try:
-                with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+                with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
                     tmp_path = tmp.name
-                # `sips -s format jpeg` writes the converted file to tmp_path.
                 r = subprocess.run(
-                    ["sips", "-s", "format", "jpeg", path, "--out", tmp_path],
+                    ["sips", "-s", "format", target_fmt, path, "--out", tmp_path],
                     capture_output=True, timeout=30,
                 )
                 if r.returncode != 0:
@@ -245,7 +274,6 @@ class Handler(BaseHTTPRequestHandler):
                 with open(tmp_path, "rb") as f:
                     data = f.read()
                 os.unlink(tmp_path)
-                ctype = "image/jpeg"
             except Exception as e:
                 self._send_json(500, {"error": "heic transcode failed", "detail": str(e)})
                 return

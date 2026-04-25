@@ -45,8 +45,9 @@
     max-width: 280px;
     max-height: 360px;
     border-radius: 12px;
-    background: var(--surface-2);
-    object-fit: cover;
+    /* transparent so stickers show the bubble color through */
+    background: transparent;
+    object-fit: contain;
   }
   .att-file {
     display: inline-flex; align-items: center; gap: 6px;
@@ -570,7 +571,7 @@ function ConversationPane({ targetMsg, lookupContact, query }) {
         {groups.map((g, gi) => (
           <React.Fragment key={gi}>
             <div className="day-divider">
-              <hr/><span>{g.day.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</span><hr/>
+              <hr/><span>{g.day.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" })}</span><hr/>
             </div>
             {g.messages.map(m => {
               const isMatch = m.id === targetMsg.id;
@@ -700,23 +701,44 @@ function useDebounced(value, ms = 180) {
   return v;
 }
 
+// Parse URL params into initial filter state. Used so other pages (stats, etc.)
+// can deep-link into a pre-filtered search view.
+function paramsFromURL() {
+  const u = new URLSearchParams(window.location.search);
+  const dateFrom = u.get("since");
+  const dateTo   = u.get("until");
+  return {
+    query: u.get("q") || "",
+    chatIds: (u.get("chat_ids") || "").split(",").map(s => s.trim()).filter(Boolean).map(Number),
+    dateFrom: dateFrom ? new Date(dateFrom + "T00:00:00") : null,
+    dateTo:   dateTo   ? new Date(dateTo   + "T00:00:00") : null,
+    order: u.get("order") || "newest",
+    fromMe:         u.get("from_me") === "true",
+    hasAttachments: u.get("attachments") === "true",
+    groupsOnly:     u.get("group") === "true",
+    showReactions:  u.get("reactions") === "true",
+  };
+}
+
 // ── Main app: Faceted Sidebar (Prototype B) ──────────────────
 function FacetedApp() {
+  const init = paramsFromURL();
   const [people, setPeople] = useState([]);           // merged people + groups
   const [contactsById, setContactsById] = useState({});  // person id → contact
   const [chatToPerson, setChatToPerson] = useState({});  // chat_rowid → contact
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(init.query);
+  const [pendingChatIds] = useState(init.chatIds);     // resolved to person ids once /people loads
   const [selectedContacts, setSelectedContacts] = useState([]);  // chat-bundle person ids
   const [selectedHandles, setSelectedHandles] = useState([]);    // handle strings (incl. "__me__")
   const [collapsed, setCollapsed] = useState({});                // sidebar section open/closed
   const toggleSection = (k) => setCollapsed(s => ({ ...s, [k]: !s[k] }));
-  const [datePreset, setDatePreset] = useState("any");
-  const [dateRange, setDateRange] = useState({ from: null, to: null });
-  const [sort, setSort] = useState("newest");
-  const [fromMe, setFromMe] = useState(false);
-  const [hasAttachments, setHasAttachments] = useState(false);
-  const [groupsOnly, setGroupsOnly] = useState(false);
-  const [showReactions, setShowReactions] = useState(false);
+  const [datePreset, setDatePreset] = useState(init.dateFrom || init.dateTo ? "custom" : "any");
+  const [dateRange, setDateRange] = useState({ from: init.dateFrom, to: init.dateTo });
+  const [sort, setSort] = useState(init.order);
+  const [fromMe, setFromMe] = useState(init.fromMe);
+  const [hasAttachments, setHasAttachments] = useState(init.hasAttachments);
+  const [groupsOnly, setGroupsOnly] = useState(init.groupsOnly);
+  const [showReactions, setShowReactions] = useState(init.showReactions);
   const [selectedId, setSelectedId] = useState(null);
   const [results, setResults] = useState([]);
   const [total, setTotal] = useState(0);
@@ -742,6 +764,14 @@ function FacetedApp() {
         const m = {};
         ps.forEach(p => p.chatIds.forEach(cid => { m[String(cid)] = p; }));
         setChatToPerson(m);
+        // Deep-link from URL (?chat_ids=…): resolve to the matching person.
+        if (pendingChatIds.length) {
+          const match = ps.find(p =>
+            p.chatIds.length === pendingChatIds.length
+            && pendingChatIds.every(cid => p.chatIds.includes(cid))
+          );
+          if (match) setSelectedContacts([match.id]);
+        }
       });
     }
     load();
