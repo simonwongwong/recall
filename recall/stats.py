@@ -323,27 +323,50 @@ def streaks(conn: sqlite3.Connection, chat_ids: list[int] | None = None) -> dict
 
 
 def all_stats(chat_ids: list[int] | None = None) -> dict[str, Any]:
-    conn = dbmod.open_index_db(read_only=True)
-    out = {
-        "overview": overview(conn, chat_ids),
-        "by_month": by_month(conn, chat_ids),
-        "by_year": by_year(conn, chat_ids),
-        "by_month_of_year": by_month_of_year(conn, chat_ids),
-        "by_hour": by_hour(conn, chat_ids),
-        "by_weekday": by_weekday(conn, chat_ids),
-        "busiest_days": busiest_days(conn, limit=10, chat_ids=chat_ids),
-        "longest_messages": longest_messages(conn, limit=3, chat_ids=chat_ids),
-        "first_messages": first_messages(conn, chat_ids=chat_ids),
-        "streaks": streaks(conn, chat_ids),
-        "stickers": sticker_stats(limit=12, chat_ids=chat_ids),
-        "emojis": emoji_stats(limit=24, chat_ids=chat_ids),
-        "tapbacks": tapback_stats(chat_ids),
-        "chat_ids": chat_ids or [],
+    """Compute every stats section in parallel.
+
+    Sections are independent SQLite aggregations; the slow one (`emoji_stats`)
+    is regex-bound and used to dominate the sequential sum. SQLite connections
+    aren't thread-safe, so each task opens its own; index.db is in WAL mode
+    so concurrent read-only connections coexist fine. Wall-clock is now
+    bounded by the slowest single section (~2–3s emojis on Termux/aarch64),
+    not the sum of all of them.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    def with_conn(fn, *args, **kwargs):
+        c = dbmod.open_index_db(read_only=True)
+        try:
+            return fn(c, *args, **kwargs)
+        finally:
+            c.close()
+
+    tasks: dict[str, Any] = {
+        "overview":         lambda: with_conn(overview, chat_ids),
+        "by_month":         lambda: with_conn(by_month, chat_ids),
+        "by_year":          lambda: with_conn(by_year, chat_ids),
+        "by_month_of_year": lambda: with_conn(by_month_of_year, chat_ids),
+        "by_hour":          lambda: with_conn(by_hour, chat_ids),
+        "by_weekday":       lambda: with_conn(by_weekday, chat_ids),
+        "busiest_days":     lambda: with_conn(busiest_days, limit=10, chat_ids=chat_ids),
+        "longest_messages": lambda: with_conn(longest_messages, limit=3, chat_ids=chat_ids),
+        "first_messages":   lambda: with_conn(first_messages, chat_ids=chat_ids),
+        "streaks":          lambda: with_conn(streaks, chat_ids),
+        "stickers":         lambda: sticker_stats(limit=12, chat_ids=chat_ids),
+        "emojis":           lambda: emoji_stats(limit=24, chat_ids=chat_ids),
+        "tapbacks":         lambda: tapback_stats(chat_ids),
     }
     # Cross-chat comparisons only make sense without a chat filter.
     if not chat_ids:
-        out["top_chats"] = top_chats(conn, limit=15)
-        out["lopsided"] = lopsided(conn, limit=10)
+        tasks["top_chats"] = lambda: with_conn(top_chats, limit=15)
+        tasks["lopsided"]  = lambda: with_conn(lopsided, limit=10)
+
+    out: dict[str, Any] = {}
+    with ThreadPoolExecutor(max_workers=min(8, len(tasks))) as ex:
+        futures = {key: ex.submit(fn) for key, fn in tasks.items()}
+        for key, fut in futures.items():
+            out[key] = fut.result()
+    out["chat_ids"] = chat_ids or []
     return out
 
 
