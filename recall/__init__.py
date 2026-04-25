@@ -1,1 +1,1 @@
-"""imessage-search — search your local iMessage history."""
+"""recall — search your local iMessage history."""
