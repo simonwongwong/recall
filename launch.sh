@@ -1,11 +1,13 @@
 #!/bin/bash
 # Recall launcher — reindex, start the server, open the browser.
 #
-# Usage:   ./launch.sh                # default port 8765
+# Usage:   ./launch.sh                # default port 8765, loopback only
 #          ./launch.sh 9000           # custom port
 #          PORT=9000 ./launch.sh
 #          ./launch.sh --no-index     # skip reindex (server starts immediately)
 #          ./launch.sh --demo         # use demo/chat.db instead of live
+#          ./launch.sh --host 1.2.3.4 # bind to a specific interface
+#          HOST=1.2.3.4 ./launch.sh
 #
 # Ctrl+C stops the server.
 
@@ -13,18 +15,22 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 PORT="${PORT:-8765}"
+HOST="${HOST:-127.0.0.1}"
 SKIP_INDEX=0
 DEMO=0
 
-for a in "$@"; do
-  case "$a" in
+while [ $# -gt 0 ]; do
+  case "$1" in
     --no-index|-n)  SKIP_INDEX=1 ;;
     --demo|-d)      DEMO=1 ;;
+    --host)         HOST="$2"; shift ;;
+    --host=*)       HOST="${1#--host=}" ;;
     --help|-h)
-      sed -n '2,11p' "$0"; exit 0 ;;
-    [0-9]*)         PORT="$a" ;;
-    *)              echo "unknown arg: $a" >&2; exit 2 ;;
+      sed -n '2,12p' "$0"; exit 0 ;;
+    [0-9]*)         PORT="$1" ;;
+    *)              echo "unknown arg: $1" >&2; exit 2 ;;
   esac
+  shift
 done
 
 if [ "$DEMO" = "1" ]; then
@@ -49,9 +55,9 @@ if lsof -ti tcp:"$PORT" >/dev/null 2>&1; then
   sleep 0.3
 fi
 
-URL="http://127.0.0.1:$PORT"
+URL="http://$HOST:$PORT"
 echo "→ starting server at $URL"
-python3 -m recall.cli serve --port "$PORT" &
+python3 -m recall.cli serve --host "$HOST" --port "$PORT" &
 SERVER_PID=$!
 trap "kill $SERVER_PID 2>/dev/null || true" EXIT INT TERM
 
