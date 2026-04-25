@@ -1,0 +1,12 @@
+data/
+*.db
+*.db-shm
+*.db-wal
+__pycache__/
+*.pyc
+.venv/
+.env
+.DS_Store
+
+# Per-machine Claude Code settings (paths, allowlists)
+.claude/settings.local.json

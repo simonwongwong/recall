@@ -1,0 +1,1199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Recall · iMessage Search</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #f0eee9; font-family: "Inter Tight", system-ui, sans-serif; }
+  #root { height: 100vh; }
+
+  /* Load-more buttons in conversation pane */
+  .load-more {
+    font-family: var(--font-mono); font-size: 11px; color: var(--ink-3);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+    padding: 5px 12px; cursor: pointer; transition: all 0.12s;
+  }
+  .load-more:hover:not(:disabled) { background: white; color: var(--ink); border-color: var(--line-2); }
+  .load-more:disabled { opacity: 0.5; cursor: default; }
+
+  /* Per-bubble timestamp shown on hover, tucked into the bubble corner. */
+  .bubble { position: relative; }
+  .bubble-tip {
+    position: absolute;
+    bottom: -16px;
+    font-family: var(--font-mono); font-size: 10px; color: var(--ink-4);
+    opacity: 0; transition: opacity 0.12s;
+    white-space: nowrap; pointer-events: none;
+    letter-spacing: 0;
+  }
+  .bubble.in  .bubble-tip { left: 4px; }
+  .bubble.out .bubble-tip { right: 4px; }
+  .bubble-row:hover .bubble-tip { opacity: 1; }
+  .bubble-block { margin-bottom: 10px; }
+  .bubble-block:last-child { margin-bottom: 0; }
+
+  /* Inline attachments inside a bubble */
+  .att-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+  .att-image-wrap { display: block; line-height: 0; }
+  .att-image {
+    display: block;
+    max-width: 280px;
+    max-height: 360px;
+    border-radius: 12px;
+    background: var(--surface-2);
+    object-fit: cover;
+  }
+  .att-file {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 6px 10px;
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--ink-2); text-decoration: none;
+    max-width: 280px; word-break: break-all;
+  }
+  .bubble.out .att-file { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.18); color: white; }
+
+  /* Missing-from-disk attachment placeholder (file lives only in iCloud) */
+  .att-missing {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--surface);
+    border: 1px dashed var(--line-2);
+    border-radius: 12px;
+    padding: 10px 14px;
+    cursor: pointer;
+    text-align: left;
+    font: inherit; color: inherit;
+    max-width: 280px;
+    transition: all 0.12s;
+  }
+  .att-missing:hover { background: white; border-color: var(--accent); }
+  .bubble.out .att-missing { background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.3); color: white; }
+  .bubble.out .att-missing:hover { background: rgba(255,255,255,0.18); }
+  .att-missing-icon {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: var(--accent-2); color: var(--accent);
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .bubble.out .att-missing-icon { background: rgba(255,255,255,0.2); color: white; }
+
+  /* Highlighter toggle: indigo when "off" (highlights hidden) */
+  .icon-btn.on { background: var(--accent-2); color: var(--accent-ink); border-color: var(--accent); }
+
+  /* Collapsible sidebar section header */
+  h4.collapsible { cursor: pointer; user-select: none; }
+  h4.collapsible:hover .chev { color: var(--ink-2); }
+  h4 .chev { color: var(--ink-4); display: inline-block; width: 10px; font-size: 10px; transition: color 0.12s; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin></script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useMemo, useEffect, useRef, useCallback } = React;
+
+// ── API client ───────────────────────────────────────────────
+const API = "";  // same origin
+
+async function apiSearch(params) {
+  const u = new URLSearchParams();
+  if (params.query) u.set("q", params.query);
+  if (params.chatId != null) u.set("chat_id", params.chatId);
+  if (params.contact) u.set("contact", params.contact);
+  if (params.handles && params.handles.length) u.set("handles", params.handles.join(","));
+  if (params.dateFrom) u.set("since", params.dateFrom.toISOString().slice(0, 10));
+  if (params.dateTo)   u.set("until", params.dateTo.toISOString().slice(0, 10));
+  if (params.fromMe != null)         u.set("is_from_me", params.fromMe);
+  if (params.hasAttachments != null) u.set("has_attachments", params.hasAttachments);
+  if (params.isGroup != null)        u.set("is_group", params.isGroup);
+  if (params.includeReactions)       u.set("include_reactions", "true");
+  if (params.order) u.set("order", params.order);
+  u.set("limit", params.limit || 200);
+  const r = await fetch(`${API}/search?${u}`);
+  return r.json();
+}
+
+async function apiChatMembers(chatIds) {
+  if (!chatIds || !chatIds.length) return { members: [] };
+  const r = await fetch(`${API}/chat-members?chat_ids=${chatIds.join(",")}`);
+  return r.json();
+}
+
+async function apiHandleSearch(q) {
+  const r = await fetch(`${API}/handle-search?q=${encodeURIComponent(q)}&limit=30`);
+  return r.json();
+}
+
+async function apiContext(rowid, before = 40, after = 20) {
+  const r = await fetch(`${API}/messages/${rowid}/context?before=${before}&after=${after}`);
+  return r.json();
+}
+
+async function apiChats() {
+  const r = await fetch(`${API}/chats?limit=2000`);
+  return r.json();
+}
+
+async function apiPeople() {
+  const r = await fetch(`${API}/people?limit=2000`);
+  return r.json();
+}
+
+// Open Messages.app to a specific chat. For 1:1 chats with a phone or email
+// identifier we use the OS URL scheme — instant, no permissions. For groups
+// (chat<guid> identifiers) we POST to the server which runs AppleScript.
+async function openInMessages(contact) {
+  if (!contact) return;
+  const ident = contact.chatIdentifier || "";
+  // For 1:1 chats with a phone or email, the URL scheme works without prompts.
+  const isPhoneOrEmail = !contact.group && /^(\+?[\d() -]{4,}|[^@\s]+@[^@\s]+\.[^@\s]+)$/.test(ident);
+  if (isPhoneOrEmail) {
+    window.location.href = `imessage:${ident}`;
+    return;
+  }
+  // Group chat (or odd identifier) — fall back to server-side AppleScript.
+  try {
+    await fetch("/open-chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_identifier: ident,
+        is_group: !!contact.group,
+      }),
+    });
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function apiReindex() {
+  const r = await fetch(`${API}/reindex`, { method: "POST" });
+  return r.json();
+}
+
+// ── Adapters: API shape → design shape ───────────────────────
+const PALETTE = [
+  "#7a6bd1","#c97a4a","#4a8a7b","#9a5a8a","#c75a5a","#5a7ac9","#7a8a5a",
+  "#3a3a3a","#c98a3a","#5a9aaa","#6c9b8b","#a06ba6","#bf8d4c","#5d6c9b",
+];
+function hashStr(s) { let h = 0; for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0; return Math.abs(h); }
+function colorFor(s) { return PALETTE[hashStr(s || "?") % PALETTE.length]; }
+function initialsOf(name) {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/).filter(p => /[A-Za-z0-9]/.test(p));
+  if (parts.length === 0) return name.slice(0, 2).toUpperCase();
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+function chatToContact(c) {
+  const id = String(c.rowid);
+  const name = c.name || c.display_name || c.chat_identifier || "?";
+  return {
+    id,
+    name,
+    initials: initialsOf(name),
+    color: colorFor(name),
+    handle: c.is_group ? `Group · ${c.chat_identifier || "?"}` : (c.chat_identifier || ""),
+    group: !!c.is_group,
+    messageCount: c.message_count || 0,
+    lastUnix: c.last_message_unix || 0,
+    chatIds: [c.rowid],
+  };
+}
+
+function personToContact(p) {
+  // Stable id across page loads: comma-joined chat ids.
+  const id = p.chat_ids.slice().sort((a, b) => a - b).join(",");
+  const handle = p.is_group
+    ? `Group · ${p.identifiers[0] || "?"}`
+    : (p.identifiers.length > 1 ? p.identifiers.join(" · ") : (p.identifiers[0] || ""));
+  return {
+    id,
+    name: p.name,
+    initials: initialsOf(p.name),
+    color: colorFor(p.name),
+    handle,
+    group: !!p.is_group,
+    messageCount: p.message_count || 0,
+    lastUnix: p.last_message_unix || 0,
+    chatIds: p.chat_ids,                  // 1+ rowids
+    chatIdentifier: p.identifiers[0] || "",  // first underlying id (phone/email/group GUID)
+    identifiers: p.identifiers || [],
+    mergedCount: p.merged_count || 1,
+  };
+}
+function hitToMessage(h) {
+  return {
+    id: h.rowid,
+    contact: String(h.chat_rowid),
+    direction: h.is_from_me ? "out" : "in",
+    text: h.text,
+    snippet: h.snippet,
+    time: h.date_unix ? new Date(h.date_unix * 1000) : new Date(0),
+    sender: h.sender_name || h.handle || null,
+    hasAttachment: !!h.has_attachments,
+    isReaction: !!h.is_reaction,
+    attachments: h.attachments || [],
+  };
+}
+
+// ── Format helpers (unchanged) ───────────────────────────────
+function fmtTime(date) {
+  const now = new Date();
+  const diffMs = Math.max(0, now - date);
+  const diffH = diffMs / 3600000;
+  const diffD = Math.floor(diffMs / 86400000);
+  if (diffMs < 60000) return "just now";
+  if (diffH < 1) return Math.round(diffMs / 60000) + "m ago";
+  if (diffH < 24) return Math.round(diffH) + "h ago";
+  if (diffD < 7) return diffD + "d ago";
+  if (diffD < 30) return Math.round(diffD / 7) + "w ago";
+  if (diffD < 365) return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
+function fmtFullDate(date) {
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) +
+    " · " + date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+// Highlight: if backend gave us a snippet with <<…>> markers, parse those into hit chunks.
+// Otherwise fall back to client-side substring matching against the query.
+function highlightSnippet(snippet) {
+  if (!snippet) return [{ text: "", hit: false }];
+  const out = [];
+  const re = /<<([^>]*)>>/g;
+  let last = 0, m;
+  while ((m = re.exec(snippet)) !== null) {
+    if (m.index > last) out.push({ text: snippet.slice(last, m.index), hit: false });
+    out.push({ text: m[1], hit: true });
+    last = re.lastIndex;
+  }
+  if (last < snippet.length) out.push({ text: snippet.slice(last), hit: false });
+  return out;
+}
+function highlightText(text, query) {
+  if (!query || !query.trim()) return [{ text, hit: false }];
+  const q = query.trim().toLowerCase();
+  const lower = (text || "").toLowerCase();
+  const out = [];
+  let i = 0;
+  while (i < (text || "").length) {
+    const idx = lower.indexOf(q, i);
+    if (idx === -1) { out.push({ text: text.slice(i), hit: false }); break; }
+    if (idx > i) out.push({ text: text.slice(i, idx), hit: false });
+    out.push({ text: text.slice(idx, idx + q.length), hit: true });
+    i = idx + q.length;
+  }
+  return out;
+}
+
+// ── Icons ────────────────────────────────────────────────────
+const Icon = ({ name, size = 16, stroke = 1.6 }) => {
+  const props = {
+    width: size, height: size, viewBox: "0 0 24 24", fill: "none",
+    stroke: "currentColor", strokeWidth: stroke,
+    strokeLinecap: "round", strokeLinejoin: "round",
+  };
+  switch (name) {
+    case "search":  return <svg {...props}><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>;
+    case "x":       return <svg {...props}><path d="M18 6 6 18M6 6l12 12"/></svg>;
+    case "filter":  return <svg {...props}><path d="M3 5h18M6 12h12M10 19h4"/></svg>;
+    case "users":   return <svg {...props}><circle cx="9" cy="8" r="3.5"/><path d="M2 20a7 7 0 0 1 14 0"/><path d="M16 4a3.5 3.5 0 0 1 0 7M22 20a7 7 0 0 0-5-6.7"/></svg>;
+    case "external":return <svg {...props}><path d="M14 4h6v6M20 4 10 14M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>;
+    case "download":return <svg {...props}><path d="M12 4v12M6 12l6 6 6-6M4 21h16"/></svg>;
+    case "more":    return <svg {...props}><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg>;
+    case "refresh": return <svg {...props}><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg>;
+    case "sort":    return <svg {...props}><path d="M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4"/></svg>;
+    case "stats":   return <svg {...props}><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>;
+    case "highlighter": return <svg {...props}><path d="M9 11l-4 4v4h4l4-4M14 6l4 4M14 6l3-3a2 2 0 0 1 3 3l-3 3"/></svg>;
+    case "highlighter-off": return <svg {...props}><path d="M9 11l-4 4v4h4l4-4M14 6l4 4M14 6l3-3a2 2 0 0 1 3 3l-3 3M3 3l18 18"/></svg>;
+    case "cloud-down": return <svg {...props}><path d="M7 18a5 5 0 0 1-1-9.9A6 6 0 0 1 17 7a4.5 4.5 0 0 1 0 9M12 12v8M9 17l3 3 3-3"/></svg>;
+    case "messages": return <svg {...props}><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.4-.7L3 21l1.8-5.6A8.4 8.4 0 1 1 21 11.5z"/></svg>;
+    default: return null;
+  }
+};
+
+// ── Avatar ───────────────────────────────────────────────────
+function Avatar({ contact, size = "md" }) {
+  if (!contact) return <div className={"avatar" + (size === "lg" ? " lg" : size === "sm" ? " sm" : "")} style={{ background: "var(--line)" }}/>;
+  const cls = "avatar" + (size === "lg" ? " lg" : size === "sm" ? " sm" : "");
+  return (
+    <div className={cls} style={{ background: contact.color }}>
+      {contact.group ? <Icon name="users" size={14} /> : contact.initials}
+    </div>
+  );
+}
+
+// ── HiText ───────────────────────────────────────────────────
+function HiText({ snippet, text, query }) {
+  const parts = snippet ? highlightSnippet(snippet) : highlightText(text, query);
+  return parts.map((p, i) => p.hit
+    ? <span key={i} className="hit">{p.text}</span>
+    : <span key={i}>{p.text}</span>);
+}
+
+// ── Result row ───────────────────────────────────────────────
+function ResultRow({ msg, lookupContact, query, active, onClick }) {
+  const c = lookupContact(msg.contact);
+  return (
+    <div className={"result-row" + (active ? " active" : "")} onClick={onClick}>
+      <Avatar contact={c} />
+      <div className="result-main">
+        <div className="result-row-top">
+          <div className="result-name">
+            {c?.name || "Unknown"}
+            {msg.direction === "out" && <span style={{ color: "var(--ink-4)", fontWeight: 400 }}> · You</span>}
+            {c?.group && msg.direction === "in" && msg.sender && (
+              <span style={{ color: "var(--ink-4)", fontWeight: 400 }}> · {msg.sender}</span>
+            )}
+          </div>
+          <div className="result-time">{fmtTime(msg.time)}</div>
+        </div>
+        <div className="result-text">
+          <HiText snippet={msg.snippet} text={msg.text} query={query} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Conversation pane ────────────────────────────────────────
+const PAGE_SIZE = 40;
+
+// ── Attachment rendering ─────────────────────────────────────
+function AttachmentView({ att, onOpenInMessages }) {
+  const url = `/attachment/${att.att_rowid}`;
+  const mime = (att.mime_type || "").toLowerCase();
+  const name = att.transfer_name || "attachment";
+  const isImg = mime.startsWith("image/") ||
+    /\.(jpe?g|png|gif|webp|heic|heif|tiff?|avif)$/i.test(name);
+  const isVid = mime.startsWith("video/") ||
+    /\.(mp4|mov|m4v|webm)$/i.test(name);
+  const isAud = mime.startsWith("audio/") ||
+    /\.(m4a|mp3|wav|caf|aac)$/i.test(name);
+  const isPlugin = name.endsWith(".pluginPayloadAttachment");
+
+  // Server already told us if the file is on disk. If not, show the
+  // iCloud-pull prompt instead of a broken-image icon.
+  if (att.on_disk === false) {
+    const kb = att.total_bytes ? Math.round(att.total_bytes / 1024) : null;
+    return (
+      <button
+        type="button"
+        className="att-missing"
+        onClick={onOpenInMessages}
+        title="Click to open this chat in Messages — scroll up to here to pull the file from iCloud"
+      >
+        <span className="att-missing-icon"><Icon name="cloud-down" size={18}/></span>
+        <span>
+          <div style={{ color: "var(--ink)", fontWeight: 500 }}>
+            {isImg ? "Photo" : isVid ? "Video" : isAud ? "Audio" : "File"} not downloaded
+          </div>
+          <div style={{ color: "var(--ink-3)", fontFamily: "var(--font-mono)", fontSize: 10, marginTop: 2 }}>
+            open in iMessage to pull{kb ? ` · ${kb.toLocaleString()} KB` : ""}
+          </div>
+        </span>
+      </button>
+    );
+  }
+
+  if (isImg) {
+    return (
+      <a className="att-image-wrap" href={url} target="_blank" rel="noreferrer">
+        <img className="att-image" src={url} alt={name} loading="lazy"/>
+      </a>
+    );
+  }
+  if (isVid) {
+    return <video className="att-image" src={url} controls preload="metadata" />;
+  }
+  if (isAud) {
+    return <audio src={url} controls style={{ width: "100%", maxWidth: 240 }} />;
+  }
+  if (isPlugin) {
+    return <div className="att-file"><span style={{ opacity: 0.7 }}>app content</span></div>;
+  }
+  const kb = att.total_bytes ? Math.round(att.total_bytes / 1024) : null;
+  return (
+    <a className="att-file" href={url} target="_blank" rel="noreferrer">
+      📎 {name}{kb ? ` · ${kb.toLocaleString()} KB` : ""}
+    </a>
+  );
+}
+
+function Attachments({ attachments, onOpenInMessages }) {
+  if (!attachments || !attachments.length) return null;
+  return (
+    <div className="att-list">
+      {attachments.map(a => (
+        <AttachmentView key={a.att_rowid} att={a} onOpenInMessages={onOpenInMessages}/>
+      ))}
+    </div>
+  );
+}
+
+function ConversationPane({ targetMsg, lookupContact, query }) {
+  const [thread, setThread] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [extending, setExtending] = useState(null); // 'before' | 'after' | null
+  const [highlightOff, setHighlightOff] = useState(false);
+  const bodyRef = useRef(null);
+
+  // Initial load: window centered on the target message.
+  useEffect(() => {
+    if (!targetMsg) { setThread([]); return; }
+    let cancelled = false;
+    setLoading(true);
+    apiContext(targetMsg.id, PAGE_SIZE, PAGE_SIZE).then(r => {
+      if (cancelled) return;
+      setThread((r.messages || []).map(hitToMessage));
+      setLoading(false);
+    }).catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [targetMsg?.id]);
+
+  useEffect(() => {
+    if (!bodyRef.current || !targetMsg) return;
+    const el = bodyRef.current.querySelector(`[data-mid="${targetMsg.id}"]`);
+    if (el) {
+      const top = el.offsetTop - bodyRef.current.clientHeight / 2 + el.clientHeight / 2;
+      bodyRef.current.scrollTo({ top: Math.max(0, top), behavior: "auto" });
+    }
+  }, [targetMsg?.id, loading]);
+
+  async function loadMore(direction) {
+    if (!thread.length || extending) return;
+    setExtending(direction);
+    const anchor = direction === "before" ? thread[0] : thread[thread.length - 1];
+    const before = direction === "before" ? PAGE_SIZE : 0;
+    const after  = direction === "before" ? 0 : PAGE_SIZE;
+    try {
+      // Preserve scroll position when prepending.
+      const body = bodyRef.current;
+      const oldScrollHeight = body?.scrollHeight || 0;
+      const oldScrollTop = body?.scrollTop || 0;
+
+      const r = await apiContext(anchor.id, before, after);
+      const incoming = (r.messages || []).map(hitToMessage);
+      setThread(prev => {
+        const have = new Set(prev.map(m => m.id));
+        const fresh = incoming.filter(m => !have.has(m.id));
+        return direction === "before" ? [...fresh, ...prev] : [...prev, ...fresh];
+      });
+      // After commit, restore scroll for "before".
+      if (direction === "before") {
+        requestAnimationFrame(() => {
+          if (!body) return;
+          const delta = body.scrollHeight - oldScrollHeight;
+          body.scrollTop = oldScrollTop + delta;
+        });
+      }
+    } finally {
+      setExtending(null);
+    }
+  }
+
+  if (!targetMsg) {
+    return (
+      <div className="panel" style={{ background: "var(--surface-2)" }}>
+        <div className="conv-head">
+          <div style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--line)" }} />
+          <div className="conv-head-meta">
+            <div className="conv-head-name" style={{ color: "var(--ink-4)" }}>No message selected</div>
+            <div className="conv-head-handle">Pick a result on the left</div>
+          </div>
+        </div>
+        <div className="conv-body" />
+      </div>
+    );
+  }
+
+  const c = lookupContact(targetMsg.contact);
+
+  // Group by day
+  const groups = [];
+  let lastDay = null;
+  thread.forEach(m => {
+    const dayKey = m.time.toDateString();
+    if (dayKey !== lastDay) { groups.push({ day: m.time, messages: [] }); lastDay = dayKey; }
+    groups[groups.length - 1].messages.push(m);
+  });
+
+  return (
+    <div className="panel" style={{ background: "var(--surface-2)" }}>
+      <div className="conv-head">
+        <Avatar contact={c} size="lg" />
+        <div className="conv-head-meta">
+          <div className="conv-head-name">{c?.name || "Unknown"}</div>
+          <div className="conv-head-handle mono">{c?.handle || ""}</div>
+        </div>
+        <div className="conv-head-actions">
+          <button
+            className={"icon-btn" + (highlightOff ? " on" : "")}
+            title={highlightOff ? "Show search highlights" : "Hide search highlights (for screenshots)"}
+            onClick={() => setHighlightOff(v => !v)}
+          >
+            <Icon name={highlightOff ? "highlighter-off" : "highlighter"} size={15} />
+          </button>
+          <button
+            className="icon-btn"
+            title="Open in Messages.app"
+            onClick={() => openInMessages(c)}
+          >
+            <Icon name="messages" size={15} />
+          </button>
+          <button className="icon-btn"><Icon name="more" size={15} /></button>
+        </div>
+      </div>
+      <div className="conv-body" ref={bodyRef}>
+        {loading && thread.length === 0 && (
+          <div style={{ textAlign: "center", color: "var(--ink-4)", padding: 40, fontFamily: "var(--font-mono)", fontSize: 11 }}>loading…</div>
+        )}
+        {thread.length > 0 && (
+          <div style={{ textAlign: "center", marginBottom: 14 }}>
+            <button className="load-more" onClick={() => loadMore("before")} disabled={extending !== null}>
+              {extending === "before" ? "loading…" : "↑ load earlier"}
+            </button>
+          </div>
+        )}
+        {groups.map((g, gi) => (
+          <React.Fragment key={gi}>
+            <div className="day-divider">
+              <hr/><span>{g.day.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}</span><hr/>
+            </div>
+            {g.messages.map(m => {
+              const isMatch = m.id === targetMsg.id;
+              const showHighlight = isMatch && !highlightOff;
+              const showSender = c?.group && m.direction === "in";
+              // iMessage uses ￼ (U+FFFC) inline as a placeholder for each attachment;
+              // strip it when we're rendering the attachment ourselves.
+              const cleaned = (m.text || "").replace(/￼/g, "").trim();
+              const hasText = cleaned.length > 0;
+              return (
+                <div key={m.id} className="bubble-block">
+                  {showSender && <div className="bubble-sender">{m.sender || "Member"}</div>}
+                  <div className={"bubble-row " + m.direction} data-mid={m.id}>
+                    <div className={"bubble " + m.direction + (showHighlight ? " match" : "")}>
+                      {hasText && <HiText text={cleaned} query={showHighlight ? query : ""} />}
+                      {m.attachments && m.attachments.length > 0 && (
+                        <Attachments attachments={m.attachments} onOpenInMessages={() => openInMessages(c)}/>
+                      )}
+                      <span className="bubble-tip" title={fmtFullDate(m.time)}>
+                        {m.time.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                      </span>
+                    </div>
+                  </div>
+                  {isMatch && !highlightOff && (
+                    <div className="bubble-time" style={{ textAlign: m.direction === "out" ? "right" : "left" }}>
+                      {fmtFullDate(m.time)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </React.Fragment>
+        ))}
+        {thread.length > 0 && (
+          <div style={{ textAlign: "center", marginTop: 14 }}>
+            <button className="load-more" onClick={() => loadMore("after")} disabled={extending !== null}>
+              {extending === "after" ? "loading…" : "↓ load later"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Topbar ───────────────────────────────────────────────────
+function Topbar({ totalCount, onReindex, lastSync }) {
+  const [reindexing, setReindexing] = useState(false);
+  async function doReindex() {
+    setReindexing(true);
+    try { await apiReindex(); window.dispatchEvent(new Event("imsg:reindexed")); }
+    finally { setReindexing(false); }
+  }
+  return (
+    <div className="topbar">
+      <div className="topbar-left">
+        <div className="topbar-brand">
+          <div className="topbar-brand-mark">R</div>
+          <span>Recall</span>
+        </div>
+        <div className="topbar-meta">{(totalCount || 0).toLocaleString()} messages indexed</div>
+      </div>
+      <div className="topbar-right">
+        <div className="topbar-status">
+          <div className="status-dot"></div>
+          <span>local · synced {lastSync || "just now"}</span>
+        </div>
+        <a className="icon-btn" href="/stats.html" title="Stats" style={{ textDecoration: "none" }}>
+          <Icon name="stats" size={14} />
+        </a>
+        <button className="icon-btn" title="Reindex" onClick={doReindex} disabled={reindexing}>
+          <Icon name="refresh" size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Results header ───────────────────────────────────────────
+function ResultsHeader({ count, total, sort, onSortChange, query }) {
+  return (
+    <div className="result-count">
+      <div>
+        <strong>{count.toLocaleString()}</strong>
+        <span style={{ color: "var(--ink-4)" }}> of {total.toLocaleString()}</span>
+        {query && <span> · matching “{query}”</span>}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <Icon name="sort" size={12} />
+        <select
+          value={sort}
+          onChange={e => onSortChange(e.target.value)}
+          style={{ background: "transparent", border: "none", outline: "none",
+                   font: "inherit", fontFamily: "var(--font-mono)", fontSize: 11,
+                   color: "var(--ink-3)", cursor: "pointer" }}
+        >
+          <option value="newest">newest</option>
+          <option value="oldest">oldest</option>
+          <option value="relevance">relevance</option>
+        </select>
+      </div>
+    </div>
+  );
+}
+
+// ── Date presets ─────────────────────────────────────────────
+const DATE_PRESETS = [
+  { id: "any", label: "any time", days: null },
+  { id: "7d",  label: "7 days",   days: 7 },
+  { id: "30d", label: "30 days",  days: 30 },
+  { id: "90d", label: "90 days",  days: 90 },
+  { id: "1y",  label: "1 year",   days: 365 },
+];
+function applyDatePreset(presetId) {
+  const p = DATE_PRESETS.find(p => p.id === presetId);
+  if (!p || !p.days) return { from: null, to: null };
+  const to = new Date();
+  const from = new Date();
+  from.setDate(from.getDate() - p.days);
+  return { from, to };
+}
+
+// ── Debounce hook ────────────────────────────────────────────
+function useDebounced(value, ms = 180) {
+  const [v, setV] = useState(value);
+  useEffect(() => { const t = setTimeout(() => setV(value), ms); return () => clearTimeout(t); }, [value, ms]);
+  return v;
+}
+
+// ── Main app: Faceted Sidebar (Prototype B) ──────────────────
+function FacetedApp() {
+  const [people, setPeople] = useState([]);           // merged people + groups
+  const [contactsById, setContactsById] = useState({});  // person id → contact
+  const [chatToPerson, setChatToPerson] = useState({});  // chat_rowid → contact
+  const [query, setQuery] = useState("");
+  const [selectedContacts, setSelectedContacts] = useState([]);  // chat-bundle person ids
+  const [selectedHandles, setSelectedHandles] = useState([]);    // handle strings (incl. "__me__")
+  const [collapsed, setCollapsed] = useState({});                // sidebar section open/closed
+  const toggleSection = (k) => setCollapsed(s => ({ ...s, [k]: !s[k] }));
+  const [datePreset, setDatePreset] = useState("any");
+  const [dateRange, setDateRange] = useState({ from: null, to: null });
+  const [sort, setSort] = useState("newest");
+  const [fromMe, setFromMe] = useState(false);
+  const [hasAttachments, setHasAttachments] = useState(false);
+  const [groupsOnly, setGroupsOnly] = useState(false);
+  const [showReactions, setShowReactions] = useState(false);
+  const [selectedId, setSelectedId] = useState(null);
+  const [results, setResults] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [contactFilter, setContactFilter] = useState("");
+  const [pageSize, setPageSize] = useState(50);   // grows on "load more"
+  const [facetByChat, setFacetByChat] = useState(null); // chat_rowid → count under current filters
+  const PAGE_STEP = 50;
+
+  const debouncedQuery = useDebounced(query, 200);
+
+  // Bootstrap: load people (merged contacts + groups)
+  useEffect(() => {
+    let cancelled = false;
+    function load() {
+      apiPeople().then(r => {
+        if (cancelled) return;
+        const ps = (r.people || []).map(personToContact);
+        setPeople(ps);
+        setContactsById(Object.fromEntries(ps.map(p => [p.id, p])));
+        // Index every underlying chat_rowid to its person bundle so result rows
+        // (which carry chat_rowid) can render the right name/avatar.
+        const m = {};
+        ps.forEach(p => p.chatIds.forEach(cid => { m[String(cid)] = p; }));
+        setChatToPerson(m);
+      });
+    }
+    load();
+    window.addEventListener("imsg:reindexed", load);
+    return () => { cancelled = true; window.removeEventListener("imsg:reindexed", load); };
+  }, []);
+
+  // Run search whenever inputs change
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    const baseParams = {
+      query: debouncedQuery,
+      contact: null,
+      handles: selectedHandles.length ? selectedHandles : null,
+      dateFrom: dateRange.from, dateTo: dateRange.to,
+      fromMe: fromMe || null,
+      hasAttachments: hasAttachments || null,
+      isGroup: groupsOnly || null,
+      includeReactions: showReactions,
+      order: sort,
+      limit: pageSize,
+    };
+
+    async function run() {
+      let hits = [], totalCount = 0;
+      if (selectedContacts.length === 0) {
+        const r = await apiSearch(baseParams);
+        hits = (r.hits || []).map(hitToMessage);
+        totalCount = r.total || 0;
+      } else {
+        // Each selected entry is a person; expand to underlying chat ids and
+        // fan out one query per chat, then merge & trim to pageSize.
+        const allChatIds = [];
+        selectedContacts.forEach(pid => {
+          const p = contactsById[pid];
+          (p?.chatIds || []).forEach(cid => allChatIds.push(cid));
+        });
+        const responses = await Promise.all(
+          allChatIds.map(cid => apiSearch({ ...baseParams, chatId: cid, limit: pageSize }))
+        );
+        const merged = [];
+        let totalSum = 0;
+        responses.forEach(r => { (r.hits || []).forEach(h => merged.push(hitToMessage(h))); totalSum += r.total || 0; });
+        if (sort === "newest") merged.sort((a, b) => b.time - a.time);
+        else if (sort === "oldest") merged.sort((a, b) => a.time - b.time);
+        hits = merged.slice(0, pageSize);
+        totalCount = totalSum;
+      }
+      if (cancelled) return;
+      setResults(hits);
+      setTotal(totalCount);
+      setLoading(false);
+    }
+    run().catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [debouncedQuery, selectedContacts, selectedHandles, dateRange, sort, fromMe, hasAttachments, groupsOnly, showReactions, pageSize]);
+
+  // Facet counts: per-chat counts under the current filters EXCLUDING the chat
+  // selection itself (so the sidebar shows what would match if you toggled).
+  // Skip the call when nothing's filtering — natural counts are already shown.
+  useEffect(() => {
+    const anyFilter = !!debouncedQuery || dateRange.from || dateRange.to
+      || fromMe || hasAttachments || groupsOnly || showReactions
+      || selectedHandles.length > 0;
+    if (!anyFilter) { setFacetByChat(null); return; }
+
+    let cancelled = false;
+    (async () => {
+      const r = await apiSearch({
+        query: debouncedQuery,
+        handles: selectedHandles.length ? selectedHandles : null,
+        dateFrom: dateRange.from, dateTo: dateRange.to,
+        fromMe: fromMe || null,
+        hasAttachments: hasAttachments || null,
+        isGroup: groupsOnly || null,
+        includeReactions: showReactions,
+        limit: 1, // only need facets, not hits
+      });
+      // Note: apiSearch doesn't pass with_facets — add it via direct fetch.
+      const u = new URLSearchParams();
+      if (debouncedQuery) u.set("q", debouncedQuery);
+      if (selectedHandles.length) u.set("handles", selectedHandles.join(","));
+      if (dateRange.from) u.set("since", dateRange.from.toISOString().slice(0, 10));
+      if (dateRange.to)   u.set("until", dateRange.to.toISOString().slice(0, 10));
+      if (fromMe) u.set("is_from_me", "true");
+      if (hasAttachments) u.set("has_attachments", "true");
+      if (groupsOnly) u.set("is_group", "true");
+      if (showReactions) u.set("include_reactions", "true");
+      u.set("with_facets", "true");
+      u.set("limit", "1");
+      const resp = await fetch(`/search?${u}`);
+      const data = await resp.json();
+      if (cancelled) return;
+      setFacetByChat(data.facets?.by_chat || {});
+    })().catch(() => {});
+    return () => { cancelled = true; };
+  }, [debouncedQuery, selectedHandles, dateRange, fromMe, hasAttachments, groupsOnly, showReactions]);
+
+  // Reset paging whenever the query/filters change.
+  useEffect(() => {
+    setPageSize(PAGE_STEP);
+  }, [debouncedQuery, selectedContacts, selectedHandles, dateRange, sort, fromMe, hasAttachments, groupsOnly, showReactions]);
+
+  // People filter source: members of selected chats, or lookup-mode results.
+  const [peopleHandleFilter, setPeopleHandleFilter] = useState("");
+  const [peopleOptions, setPeopleOptions] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (selectedContacts.length > 0) {
+        // Members of selected chats — union across all underlying chat ids.
+        const chatIds = [];
+        selectedContacts.forEach(pid => {
+          const p = contactsById[pid];
+          (p?.chatIds || []).forEach(cid => chatIds.push(cid));
+        });
+        const r = await apiChatMembers(chatIds);
+        if (!cancelled) setPeopleOptions(r.members || []);
+      } else if (peopleHandleFilter.trim()) {
+        const r = await apiHandleSearch(peopleHandleFilter.trim());
+        if (!cancelled) setPeopleOptions(r.handles || []);
+      } else {
+        if (!cancelled) setPeopleOptions([]);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [selectedContacts, contactsById, peopleHandleFilter]);
+
+  // Auto-select first result when results change
+  useEffect(() => {
+    if (results.length && !results.find(r => r.id === selectedId)) setSelectedId(results[0].id);
+  }, [results]);
+
+  const target = results.find(r => r.id === selectedId);
+
+  // Resolve a chat_rowid (from a result) OR a person id to its person bundle.
+  const lookupContact = useCallback((key) => {
+    return chatToPerson[String(key)] || contactsById[String(key)] || null;
+  }, [chatToPerson, contactsById]);
+
+  function togglePerson(id) {
+    setSelectedContacts(cs => cs.includes(id) ? cs.filter(x => x !== id) : [...cs, id]);
+  }
+  function pickPreset(id) {
+    setDatePreset(id);
+    setDateRange(applyDatePreset(id));
+  }
+  function setDateField(field, value) {
+    // value is "YYYY-MM-DD" from the native date input, or "" to clear.
+    const d = value ? new Date(value + "T00:00:00") : null;
+    setDatePreset("custom");
+    setDateRange(prev => ({ ...prev, [field]: d }));
+  }
+  function clearAll() {
+    setSelectedContacts([]); setSelectedHandles([]); pickPreset("any");
+    setFromMe(false); setHasAttachments(false); setGroupsOnly(false);
+  }
+
+  const totalActive = selectedContacts.length + selectedHandles.length
+    + (datePreset !== "any" ? 1 : 0)
+    + (fromMe ? 1 : 0) + (hasAttachments ? 1 : 0) + (groupsOnly ? 1 : 0);
+
+  function toggleHandle(h) {
+    setSelectedHandles(hs => hs.includes(h) ? hs.filter(x => x !== h) : [...hs, h]);
+  }
+
+  // Sidebar chat list — by-chat facet counts when any filter is active, else
+  // by natural message count. Filtered by free-text input.
+  const peopleList = useMemo(() => {
+    const f = contactFilter.trim().toLowerCase();
+    const filterMatch = c => !f || c.name.toLowerCase().includes(f) || (c.handle || "").toLowerCase().includes(f);
+
+    if (facetByChat) {
+      // Refine: sum facet counts across each person's chat_ids; drop zeros.
+      const augmented = people
+        .filter(filterMatch)
+        .map(c => {
+          const fc = c.chatIds.reduce((s, cid) => s + (facetByChat[cid] || 0), 0);
+          return { ...c, filteredCount: fc };
+        })
+        .filter(c => c.filteredCount > 0)
+        .sort((a, b) => b.filteredCount - a.filteredCount);
+      return augmented.slice(0, 100);
+    }
+
+    return people.filter(filterMatch).slice(0, 100);
+  }, [people, contactFilter, facetByChat]);
+
+  return (
+    <div className="imsg-app">
+      <Topbar totalCount={people.reduce((s, p) => s + (p.messageCount || 0), 0)} />
+      <div className="split with-sidebar">
+        {/* Sidebar */}
+        <div className="sidebar">
+          <div className="sidebar-scroll">
+            <div className="sidebar-section">
+              <div className="search-input-row" style={{ height: 34 }}>
+                <span className="search-icon"><Icon name="search" size={14}/></span>
+                <input
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  placeholder="Search messages…"
+                  style={{ fontSize: 13 }}
+                  autoFocus
+                />
+                {query && <button className="icon-btn" onClick={() => setQuery("")}><Icon name="x" size={12}/></button>}
+              </div>
+              {totalActive > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-3)" }}>
+                  <span>{totalActive} filter{totalActive !== 1 ? "s" : ""} active</span>
+                  <span style={{ color: "var(--accent)", cursor: "pointer" }} onClick={clearAll}>clear all</span>
+                </div>
+              )}
+            </div>
+
+            <div className="sidebar-section">
+              <h4 className="collapsible" onClick={() => toggleSection("chats")}>
+                <span><span className="chev">{collapsed.chats ? "▸" : "▾"}</span> Chats</span>
+                <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  {selectedContacts.length > 0 && <span className="clear" onClick={(e) => { e.stopPropagation(); setSelectedContacts([]); }}>clear</span>}
+                </span>
+              </h4>
+              {!collapsed.chats && (
+                <>
+                  <div className="search-input-row" style={{ height: 28, marginBottom: 8 }}>
+                    <span className="search-icon"><Icon name="search" size={12}/></span>
+                    <input
+                      value={contactFilter}
+                      onChange={e => setContactFilter(e.target.value)}
+                      placeholder="Filter chats…"
+                      style={{ fontSize: 12 }}
+                    />
+                  </div>
+                  <div style={{ marginLeft: -4, marginRight: -4, maxHeight: 320, overflowY: "auto" }}>
+                    {peopleList.map(c => {
+                      const sel = selectedContacts.includes(c.id);
+                      return (
+                        <div key={c.id} className={"facet-item" + (sel ? " selected" : "")} onClick={() => togglePerson(c.id)}>
+                          <span className={"facet-check" + (sel ? " checked" : "")}>
+                            {sel && <svg width="10" height="10" viewBox="0 0 12 12"><path d="M2 6.5L5 9l5-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                          </span>
+                          <Avatar contact={c} size="sm"/>
+                          <span className="facet-label">{c.name}</span>
+                          <span className="facet-count" title={facetByChat ? `${(c.filteredCount || 0).toLocaleString()} matching of ${c.messageCount.toLocaleString()} total` : ""}>
+                            {facetByChat
+                              ? <>
+                                  <span style={{ color: "var(--accent)" }}>{(c.filteredCount || 0).toLocaleString()}</span>
+                                  <span style={{ color: "var(--ink-4)", opacity: 0.7 }}> / {c.messageCount.toLocaleString()}</span>
+                                </>
+                              : c.messageCount.toLocaleString()}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    {facetByChat && peopleList.length === 0 && (
+                      <div style={{ padding: "8px 6px", fontSize: 11.5, color: "var(--ink-4)", fontFamily: "var(--font-mono)" }}>
+                        no chats match these filters
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="sidebar-section">
+              <h4 className="collapsible" onClick={() => toggleSection("people")}>
+                <span><span className="chev">{collapsed.people ? "▸" : "▾"}</span> People</span>
+                {selectedHandles.length > 0 && <span className="clear" onClick={(e) => { e.stopPropagation(); setSelectedHandles([]); }}>clear</span>}
+              </h4>
+              {!collapsed.people && (
+                <>
+                  {selectedContacts.length === 0 && (
+                    <div className="search-input-row" style={{ height: 28, marginBottom: 8 }}>
+                      <span className="search-icon"><Icon name="search" size={12}/></span>
+                      <input
+                        value={peopleHandleFilter}
+                        onChange={e => setPeopleHandleFilter(e.target.value)}
+                        placeholder="Find a person…"
+                        style={{ fontSize: 12 }}
+                      />
+                    </div>
+                  )}
+                  {selectedContacts.length > 0 && (
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-4)", marginBottom: 6, padding: "0 4px" }}>
+                      members of {selectedContacts.length} selected chat{selectedContacts.length !== 1 ? "s" : ""}
+                    </div>
+                  )}
+                  <div style={{ marginLeft: -4, marginRight: -4, maxHeight: 240, overflowY: "auto" }}>
+                    {peopleOptions.length === 0 && (
+                      <div style={{ padding: "8px 6px", fontSize: 11.5, color: "var(--ink-4)", fontFamily: "var(--font-mono)" }}>
+                        {selectedContacts.length === 0
+                          ? (peopleHandleFilter.trim() ? "no matches" : "select chats above, or type to find a person")
+                          : "no participants"}
+                      </div>
+                    )}
+                    {peopleOptions.map(opt => {
+                      const sel = selectedHandles.includes(opt.handle);
+                      const fakeContact = opt.is_me
+                        ? { name: "You", initials: "Me", color: "var(--accent)" }
+                        : { name: opt.contact_name, initials: initialsOf(opt.contact_name), color: colorFor(opt.contact_name) };
+                      return (
+                        <div key={opt.handle} className={"facet-item" + (sel ? " selected" : "")} onClick={() => toggleHandle(opt.handle)}>
+                          <span className={"facet-check" + (sel ? " checked" : "")}>
+                            {sel && <svg width="10" height="10" viewBox="0 0 12 12"><path d="M2 6.5L5 9l5-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                          </span>
+                          <Avatar contact={fakeContact} size="sm"/>
+                          <span className="facet-label" title={opt.handle}>
+                            {opt.contact_name}
+                            {opt.contact_name !== opt.handle && !opt.is_me && (
+                              <span style={{ color: "var(--ink-4)", fontFamily: "var(--font-mono)", fontSize: 10, marginLeft: 4 }}>{opt.handle}</span>
+                            )}
+                          </span>
+                          <span className="facet-count">{opt.message_count.toLocaleString()}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="sidebar-section">
+              <h4 className="collapsible" onClick={() => toggleSection("date")}>
+                <span><span className="chev">{collapsed.date ? "▸" : "▾"}</span> Date</span>
+                {datePreset !== "any" && <span className="clear" onClick={(e) => { e.stopPropagation(); pickPreset("any"); }}>clear</span>}
+              </h4>
+              {!collapsed.date && (
+                <>
+                  <div className="preset-row" style={{ marginTop: 0, marginBottom: 10 }}>
+                    {DATE_PRESETS.map(p => (
+                      <span key={p.id} className={"preset" + (datePreset === p.id ? " active" : "")} onClick={() => pickPreset(p.id)}>{p.label}</span>
+                    ))}
+                  </div>
+                  <div className="date-row">
+                    <input
+                      className="date-input"
+                      type="date"
+                      value={dateRange.from ? dateRange.from.toISOString().slice(0,10) : ""}
+                      onChange={e => setDateField("from", e.target.value)}
+                    />
+                    <input
+                      className="date-input"
+                      type="date"
+                      value={dateRange.to ? dateRange.to.toISOString().slice(0,10) : ""}
+                      onChange={e => setDateField("to", e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="sidebar-section">
+              <h4 className="collapsible" onClick={() => toggleSection("type")}>
+                <span><span className="chev">{collapsed.type ? "▸" : "▾"}</span> Type</span>
+              </h4>
+              {!collapsed.type && (
+                <>
+              <div className="facet-item" onClick={() => setFromMe(v => !v)}>
+                <span className={"facet-check" + (fromMe ? " checked" : "")}>
+                  {fromMe && <svg width="10" height="10" viewBox="0 0 12 12"><path d="M2 6.5L5 9l5-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                </span>
+                <span className="facet-label">From me only</span>
+              </div>
+              <div className="facet-item" onClick={() => setHasAttachments(v => !v)}>
+                <span className={"facet-check" + (hasAttachments ? " checked" : "")}>
+                  {hasAttachments && <svg width="10" height="10" viewBox="0 0 12 12"><path d="M2 6.5L5 9l5-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                </span>
+                <span className="facet-label">Has attachments</span>
+              </div>
+              <div className="facet-item" onClick={() => setGroupsOnly(v => !v)}>
+                <span className={"facet-check" + (groupsOnly ? " checked" : "")}>
+                  {groupsOnly && <svg width="10" height="10" viewBox="0 0 12 12"><path d="M2 6.5L5 9l5-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                </span>
+                <span className="facet-label">Group chats only</span>
+              </div>
+              <div className="facet-item" onClick={() => setShowReactions(v => !v)}>
+                <span className={"facet-check" + (showReactions ? " checked" : "")}>
+                  {showReactions && <svg width="10" height="10" viewBox="0 0 12 12"><path d="M2 6.5L5 9l5-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                </span>
+                <span className="facet-label">Show reactions</span>
+              </div>
+                </>
+              )}
+            </div>
+          </div>
+          <div style={{ padding: "12px 16px", borderTop: "1px solid var(--line)", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-4)", flexShrink: 0, background: "var(--surface-2)" }}>
+            <div>{people.length.toLocaleString()} people · {people.reduce((s, p) => s + (p.messageCount || 0), 0).toLocaleString()} messages</div>
+          </div>
+        </div>
+
+        {/* Result list */}
+        <div className="panel">
+          <ResultsHeader
+            count={results.length}
+            total={total}
+            sort={sort}
+            onSortChange={setSort}
+            query={debouncedQuery}
+          />
+          <div className="panel-body">
+            {results.length === 0 && !loading && (
+              <div className="empty">
+                <div className="empty-mark"><Icon name={query ? "search" : "filter"} size={18}/></div>
+                <div className="empty-title">{query ? "No messages found" : "Nothing matches these filters"}</div>
+                <div>{query ? "Try fewer filters or a different query." : "Pick a person, set a date range, or type a query."}</div>
+              </div>
+            )}
+            {loading && results.length === 0 && (
+              <div style={{ padding: 40, textAlign: "center", color: "var(--ink-4)", fontFamily: "var(--font-mono)", fontSize: 11 }}>searching…</div>
+            )}
+            {results.map(m => (
+              <ResultRow
+                key={m.id}
+                msg={m}
+                lookupContact={lookupContact}
+                query={debouncedQuery}
+                active={selectedId === m.id}
+                onClick={() => setSelectedId(m.id)}
+              />
+            ))}
+            {results.length > 0 && (
+              <div style={{ display: "flex", justifyContent: "center", gap: 8, padding: "14px 16px 18px" }}>
+                {results.length < total && (
+                  <button className="load-more" onClick={() => setPageSize(s => s + PAGE_STEP)} disabled={loading}>
+                    {loading ? "loading…" : `load ${Math.min(PAGE_STEP, total - results.length)} more`}
+                  </button>
+                )}
+                {pageSize > PAGE_STEP && (
+                  <button className="load-more" onClick={() => setPageSize(PAGE_STEP)} disabled={loading}>
+                    show less
+                  </button>
+                )}
+                {results.length >= total && results.length > PAGE_STEP && (
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-4)", alignSelf: "center" }}>
+                    end of results
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <ConversationPane targetMsg={target} lookupContact={lookupContact} query={debouncedQuery} />
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<FacetedApp />);
+</script>
+</body>
+</html>

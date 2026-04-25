@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Recall · Stats</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+<style>
+  html, body { margin: 0; padding: 0; min-height: 100%; background: var(--bg); font-family: var(--font-ui); color: var(--ink); }
+  .stats-wrap { max-width: 1080px; margin: 0 auto; padding: 28px 28px 80px; }
+  .stats-back { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-3); text-decoration: none; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.02em; }
+  .stats-back:hover { color: var(--ink); }
+  .stats-h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.015em; margin: 14px 0 4px; }
+  .stats-sub { font-family: var(--font-mono); font-size: 12px; color: var(--ink-3); margin-bottom: 28px; }
+  .grid { display: grid; gap: 14px; }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
+  .card h3 { margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-4); }
+  .card .big { font-size: 26px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.15; font-variant-numeric: tabular-nums; }
+  .card .sub { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); margin-top: 4px; }
+  .section { margin-top: 28px; }
+  .section-title { font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 12px 2px; display: flex; align-items: center; gap: 12px; }
+  .chart-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
+  .row-list { display: flex; flex-direction: column; }
+  .row-list-item { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 7px 0; border-bottom: 1px dashed var(--line); align-items: baseline; }
+  .row-list-item:last-child { border-bottom: none; }
+  .row-list-name { font-size: 13px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row-list-meta { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .bar-row { display: grid; grid-template-columns: 160px 1fr 70px; gap: 10px; align-items: center; padding: 5px 0; font-size: 12.5px; }
+  .bar-row .name { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-row .count { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); text-align: right; font-variant-numeric: tabular-nums; }
+  .bar-track { height: 18px; background: var(--surface-2); border-radius: 3px; position: relative; overflow: hidden; }
+  .bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 3px; }
+  .bar-fill.split-them { background: var(--bubble-in); }
+  .bar-fill.split-me { background: var(--accent); }
+  .legend { display: inline-flex; gap: 14px; align-items: center; font-family: var(--font-mono); font-size: 10px; color: var(--ink-3); margin-left: 10px; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 5px; vertical-align: middle; }
+  .quote-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 20px; }
+  .quote-text { font-size: 13.5px; color: var(--ink); line-height: 1.55; max-height: 220px; overflow: auto; white-space: pre-wrap; }
+  .quote-meta { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); margin-top: 10px; display: flex; justify-content: space-between; }
+  .quote-card + .quote-card { margin-top: 10px; }
+  .loading { text-align: center; padding: 80px; color: var(--ink-4); font-family: var(--font-mono); font-size: 12px; }
+
+  /* Pagination row */
+  .pager { display: flex; justify-content: center; gap: 8px; margin-top: 12px; }
+  .pager-btn {
+    font-family: var(--font-mono); font-size: 11px; color: var(--ink-3);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+    padding: 5px 12px; cursor: pointer; transition: all 0.12s;
+  }
+  .pager-btn:hover:not(:disabled) { background: white; color: var(--ink); border-color: var(--line-2); }
+  .pager-btn:disabled { opacity: 0.4; cursor: default; }
+  .pager-status { font-family: var(--font-mono); font-size: 11px; color: var(--ink-4); align-self: center; }
+
+  /* Year × Month heatmap */
+  .heatmap { display: flex; flex-direction: column; gap: 4px; font-family: var(--font-mono); }
+  .heatmap-header, .heatmap-row {
+    display: grid;
+    grid-template-columns: 50px repeat(12, 1fr) 60px;
+    gap: 4px;
+    align-items: center;
+  }
+  .heatmap-corner { width: 50px; }
+  .heatmap-col-label { text-align: center; font-size: 10px; color: var(--ink-4); padding: 0 0 4px; }
+  .heatmap-row-label { text-align: right; font-size: 11px; color: var(--ink-3); padding-right: 6px; }
+  .heatmap-cell {
+    aspect-ratio: 1.4;
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9.5px;
+    transition: transform 0.1s;
+  }
+  .heatmap-cell:hover { transform: scale(1.04); }
+  .heatmap-row-total { font-size: 11px; color: var(--ink-3); text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* Segment control (for direction toggle) */
+  .seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 2px; }
+  .seg button {
+    font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-3);
+    background: transparent; border: none; padding: 4px 10px; border-radius: 4px;
+    cursor: pointer; transition: all 0.12s; letter-spacing: 0.02em;
+  }
+  .seg button.active { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
+  .seg button:hover:not(.active) { color: var(--ink-2); }
+</style>
+</head>
+<body>
+<div id="root" class="stats-wrap"><div class="loading">loading stats…</div></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin></script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo } = React;
+
+function fmtN(n) { return (n || 0).toLocaleString(); }
+function fmtDate(unix) {
+  if (!unix) return "—";
+  return new Date(unix * 1000).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+}
+function fmtIsoDay(s) {
+  if (!s) return "—";
+  return new Date(s + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", year: "numeric", month: "short", day: "numeric" });
+}
+function daysBetween(a, b) {
+  if (!a || !b) return 0;
+  return Math.round((b - a) / 86400);
+}
+
+// "Nice" round upper bound + tick step for axis labels
+function niceScale(rawMax, ticks = 4) {
+  if (rawMax <= 0) return { max: 1, step: 1, ticks: [0, 1] };
+  const exp = Math.floor(Math.log10(rawMax / ticks));
+  const base = Math.pow(10, exp);
+  const candidates = [1, 2, 2.5, 5, 10];
+  let step = base;
+  for (const c of candidates) {
+    if (c * base * ticks >= rawMax) { step = c * base; break; }
+  }
+  const max = step * ticks;
+  return { max, step, ticks: Array.from({ length: ticks + 1 }, (_, i) => i * step) };
+}
+function fmtTick(v) {
+  if (v === 0) return "0";
+  if (v >= 1000) return (v / 1000).toFixed(v >= 10000 ? 0 : 1) + "k";
+  return String(v);
+}
+
+// ── SVG bar chart (categorical, fixed pixel sizing so labels stay legible) ─
+function VBarChart({ data, labels, height = 180, accent = "var(--accent)" }) {
+  const barW = 30;
+  const gap = 8;
+  const padL = 36;
+  const padR = 8;
+  const padTop = 12;
+  const padBottom = 22;
+  const w = padL + padR + data.length * barW + (data.length - 1) * gap;
+  const innerH = height - padTop - padBottom;
+  const innerW = w - padL - padR;
+  const scale = niceScale(Math.max(1, ...data), 4);
+  const y = v => padTop + innerH - (v / scale.max) * innerH;
+  return (
+    <svg viewBox={`0 0 ${w} ${height}`} width="100%" height={height}
+         preserveAspectRatio="xMidYMid meet"
+         style={{ display: "block" }}>
+      {scale.ticks.map((t, i) => (
+        <g key={i}>
+          <line x1={padL} x2={w - padR} y1={y(t)} y2={y(t)} stroke="var(--line)" strokeDasharray="2 4"/>
+          <text x={padL - 6} y={y(t) + 3} fill="var(--ink-4)"
+                fontFamily="var(--font-mono)" fontSize="10" textAnchor="end">
+            {fmtTick(t)}
+          </text>
+        </g>
+      ))}
+      {data.map((v, i) => {
+        const h = (v / scale.max) * innerH;
+        const x = padL + i * (barW + gap);
+        return (
+          <g key={i}>
+            <rect x={x} y={padTop + innerH - h} width={barW} height={h}
+                  fill={accent} rx={2}/>
+            {labels && labels[i] != null && (
+              <text x={x + barW / 2} y={height - 6} fill="var(--ink-4)"
+                    fontFamily="var(--font-mono)" fontSize="10" textAnchor="middle">
+                {labels[i]}
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// ── Monthly area chart with split (you vs received) ──────────
+function TimelineChart({ buckets, height = 220, xLabelEvery = "auto" }) {
+  const w = 880, pad = { l: 40, r: 12, t: 12, b: 28 };
+  const max = Math.max(1, ...buckets.map(m => m.n));
+  const innerW = w - pad.l - pad.r;
+  const innerH = height - pad.t - pad.b;
+  const x = i => pad.l + (i / Math.max(1, buckets.length - 1)) * innerW;
+  const y = v => pad.t + innerH - (v / max) * innerH;
+
+  const ticks = 4;
+  const tickVals = Array.from({ length: ticks + 1 }, (_, i) => Math.round((max * i) / ticks));
+  const totalPath = "M " + buckets.map((m, i) => `${x(i)} ${y(m.n)}`).join(" L ");
+  const totalArea = totalPath + ` L ${x(buckets.length - 1)} ${pad.t + innerH} L ${x(0)} ${pad.t + innerH} Z`;
+  const mePath    = "M " + buckets.map((m, i) => `${x(i)} ${y(m.me || 0)}`).join(" L ");
+  const meArea    = mePath + ` L ${x(buckets.length - 1)} ${pad.t + innerH} L ${x(0)} ${pad.t + innerH} Z`;
+
+  const step = xLabelEvery === "auto" ? Math.max(1, Math.round(buckets.length / 8)) : xLabelEvery;
+  return (
+    <svg viewBox={`0 0 ${w} ${height}`} width="100%" preserveAspectRatio="xMidYMid meet" style={{ display: "block" }}>
+      {tickVals.map((v, i) => (
+        <g key={i}>
+          <line x1={pad.l} x2={w - pad.r} y1={y(v)} y2={y(v)} stroke="var(--line)" strokeDasharray="2 4"/>
+          <text x={pad.l - 6} y={y(v) + 3} fill="var(--ink-4)" fontFamily="var(--font-mono)" fontSize="10" textAnchor="end">
+            {v >= 1000 ? (v/1000).toFixed(v >= 10000 ? 0 : 1) + "k" : v}
+          </text>
+        </g>
+      ))}
+      <path d={totalArea} fill="var(--bubble-in)" opacity="0.85"/>
+      <path d={meArea}    fill="var(--accent)"   opacity="0.9"/>
+      <path d={totalPath} fill="none" stroke="var(--ink-2)" strokeWidth="0.8"/>
+      {buckets.map((m, i) => i % step === 0 && (
+        <text key={i} x={x(i)} y={height - 8} fill="var(--ink-4)"
+              fontFamily="var(--font-mono)" fontSize="10" textAnchor="middle">
+          {m.bucket}
+        </text>
+      ))}
+    </svg>
+  );
+}
+
+// ── Split bar chart for hour/weekday/month-of-year ───────────
+function SplitBarChart({ data, labels, height = 180 }) {
+  const barW = 30;
+  const gap = 8;
+  const padL = 40;
+  const padR = 8;
+  const padTop = 12;
+  const padBottom = 22;
+  const w = padL + padR + data.length * barW + (data.length - 1) * gap;
+  const innerH = height - padTop - padBottom;
+  const scale = niceScale(Math.max(1, ...data.map(d => d.n)), 4);
+  const y = v => padTop + innerH - (v / scale.max) * innerH;
+  return (
+    <svg viewBox={`0 0 ${w} ${height}`} width="100%" height={height}
+         preserveAspectRatio="xMidYMid meet" style={{ display: "block" }}>
+      {scale.ticks.map((t, i) => (
+        <g key={i}>
+          <line x1={padL} x2={w - padR} y1={y(t)} y2={y(t)} stroke="var(--line)" strokeDasharray="2 4"/>
+          <text x={padL - 6} y={y(t) + 3} fill="var(--ink-4)"
+                fontFamily="var(--font-mono)" fontSize="10" textAnchor="end">
+            {fmtTick(t)}
+          </text>
+        </g>
+      ))}
+      {data.map((d, i) => {
+        const total = d.n;
+        const me = d.me || 0;
+        const them = total - me;
+        const totH = (total / scale.max) * innerH;
+        const themH = (them / scale.max) * innerH;
+        const meH = (me / scale.max) * innerH;
+        const x = padL + i * (barW + gap);
+        return (
+          <g key={i}>
+            <rect x={x} y={padTop + innerH - totH} width={barW} height={themH} fill="var(--bubble-in)" rx={2}/>
+            <rect x={x} y={padTop + innerH - totH + themH} width={barW} height={meH} fill="var(--accent)" rx={2}/>
+            {labels && labels[i] != null && (
+              <text x={x + barW / 2} y={height - 6} fill="var(--ink-4)"
+                    fontFamily="var(--font-mono)" fontSize="10" textAnchor="middle">
+                {labels[i]}
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// ── Year × Month heatmap ─────────────────────────────────────
+function YearMonthHeatmap({ buckets }) {
+  // buckets: [{bucket: "YYYY-MM", n, me}, ...]
+  const yearMap = {};
+  buckets.forEach(b => {
+    const [y, m] = b.bucket.split("-").map(Number);
+    if (!yearMap[y]) yearMap[y] = {};
+    yearMap[y][m] = b;
+  });
+  const years = Object.keys(yearMap).map(Number).sort((a, b) => a - b);
+  const max = Math.max(1, ...buckets.map(b => b.n));
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+  function colorFor(n) {
+    if (!n) return "var(--surface-2)";
+    const t = Math.min(1, Math.max(0.06, n / max));
+    return `rgba(42, 58, 138, ${t.toFixed(3)})`;  // var(--accent) at variable opacity
+  }
+
+  return (
+    <div className="heatmap">
+      <div className="heatmap-header">
+        <div className="heatmap-corner"></div>
+        {months.map(m => <div key={m} className="heatmap-col-label">{m}</div>)}
+        <div className="heatmap-row-total">total</div>
+      </div>
+      {years.map(y => {
+        const yearTotal = Object.values(yearMap[y]).reduce((s, b) => s + b.n, 0);
+        return (
+          <div key={y} className="heatmap-row">
+            <div className="heatmap-row-label">{y}</div>
+            {months.map((_, i) => {
+              const b = yearMap[y][i + 1];
+              const n = b?.n || 0;
+              return (
+                <div key={i} className="heatmap-cell"
+                     title={`${y}-${String(i+1).padStart(2,"0")}: ${fmtN(n)} messages${b ? ` (${fmtN(b.me)} from you)` : ""}`}
+                     style={{ background: colorFor(n) }}>
+                  <span style={{ color: n > max * 0.55 ? "white" : "var(--ink-3)" }}>
+                    {n ? fmtTick(n) : ""}
+                  </span>
+                </div>
+              );
+            })}
+            <div className="heatmap-row-total mono">{fmtN(yearTotal)}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Pager ────────────────────────────────────────────────────
+function Pager({ offset, limit, total, onChange, loading }) {
+  const start = offset + 1;
+  const end = Math.min(offset + limit, total);
+  const canPrev = offset > 0;
+  const canNext = offset + limit < total;
+  return (
+    <div className="pager">
+      <button className="pager-btn" disabled={!canPrev || loading} onClick={() => onChange(Math.max(0, offset - limit))}>← prev</button>
+      <span className="pager-status">{total ? `${start}–${end} of ${fmtN(total)}` : "—"}</span>
+      <button className="pager-btn" disabled={!canNext || loading} onClick={() => onChange(offset + limit)}>next →</button>
+    </div>
+  );
+}
+
+// ── Hooks for paginated sections ─────────────────────────────
+function useStatsList(path, limit, extraQuery) {
+  const [offset, setOffset] = useState(0);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const url = useMemo(() => {
+    const u = new URLSearchParams({ limit, offset });
+    Object.entries(extraQuery || {}).forEach(([k, v]) => u.set(k, v));
+    return `${path}?${u}`;
+  }, [path, limit, offset, JSON.stringify(extraQuery)]);
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetch(url).then(r => r.json()).then(d => { if (!cancelled) { setData(d); setLoading(false); } })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [url]);
+  // Reset offset when extraQuery changes (e.g. mode toggle)
+  useEffect(() => { setOffset(0); }, [JSON.stringify(extraQuery)]);
+  return { data, offset, setOffset, loading, limit };
+}
+
+// ── Top chats section (paginated) ────────────────────────────
+function TopChatsSection({ initial }) {
+  const list = useStatsList("/stats/top-chats", 15);
+  const data = list.data || initial;
+  const items = data.items || [];
+  const total = data.total || 0;
+  const peakN = items[0]?.n || 1;
+  return (
+    <div className="section">
+      <h2 className="section-title">most active conversations</h2>
+      <div className="chart-card">
+        {items.map(c => (
+          <div key={c.chat_id} className="bar-row" title={`${c.n} messages · ${c.n ? Math.round(c.me/c.n*100) : 0}% from you`}>
+            <div className="name">{c.name}{c.is_group ? " · group" : ""}</div>
+            <div className="bar-track">
+              <div className="bar-fill split-them" style={{ width: ((c.n / peakN) * 100) + "%" }}/>
+              <div className="bar-fill split-me"   style={{ width: ((c.me / peakN) * 100) + "%" }}/>
+            </div>
+            <div className="count">{fmtN(c.n)}</div>
+          </div>
+        ))}
+        <div className="legend" style={{ marginTop: 8 }}>
+          <span><span className="legend-dot" style={{ background: "var(--accent)" }}/>from you</span>
+          <span><span className="legend-dot" style={{ background: "var(--bubble-in)" }}/>received</span>
+        </div>
+        <Pager {...list} total={total} onChange={list.setOffset}/>
+      </div>
+    </div>
+  );
+}
+
+// ── Lopsided pair (paginated together) ───────────────────────
+function LopsidedSection({ initial }) {
+  const list = useStatsList("/stats/lopsided", 10);
+  const data = list.data || initial;
+  return (
+    <div className="section grid grid-2">
+      <div>
+        <h2 className="section-title">you talk into the void</h2>
+        <div className="chart-card">
+          <div className="row-list">
+            {(data.you_send_more || []).map(r => (
+              <div key={r.chat_id} className="row-list-item">
+                <div className="row-list-name">{r.name}</div>
+                <div className="row-list-meta">{r.me_pct}% you · {fmtN(r.n)} msgs</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div>
+        <h2 className="section-title">they talk, you nod</h2>
+        <div className="chart-card">
+          <div className="row-list">
+            {(data.they_send_more || []).map(r => (
+              <div key={r.chat_id} className="row-list-item">
+                <div className="row-list-name">{r.name}</div>
+                <div className="row-list-meta">{r.me_pct}% you · {fmtN(r.n)} msgs</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div style={{ gridColumn: "1 / -1" }}>
+        <Pager {...list} total={data.total || 0} onChange={list.setOffset}/>
+      </div>
+    </div>
+  );
+}
+
+// ── Busiest days section (mode toggle + pagination) ──────────
+function BusiestDaysSection({ initial }) {
+  const [mode, setMode] = useState("all");
+  const list = useStatsList("/stats/busiest-days", 10, { mode });
+  const data = list.data || initial;
+  const items = data.items || [];
+  return (
+    <div className="section">
+      <h2 className="section-title">
+        busiest single days
+        <span className="seg">
+          <button className={mode === "all" ? "active" : ""} onClick={() => setMode("all")}>both</button>
+          <button className={mode === "me" ? "active" : ""} onClick={() => setMode("me")}>sent</button>
+          <button className={mode === "them" ? "active" : ""} onClick={() => setMode("them")}>received</button>
+        </span>
+      </h2>
+      <div className="chart-card">
+        <div className="row-list">
+          {items.map(d => (
+            <div key={d.day} className="row-list-item">
+              <div className="row-list-name">{fmtIsoDay(d.day)}</div>
+              <div className="row-list-meta">
+                {fmtN(d.n)} msgs
+                {mode === "all" && <span style={{ color: "var(--ink-4)" }}> · {fmtN(d.me)} sent · {fmtN(d.them)} received</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+        <Pager {...list} total={data.total || 0} onChange={list.setOffset}/>
+      </div>
+    </div>
+  );
+}
+
+// ── Longest messages section (paginated) ─────────────────────
+function LongestMessagesSection({ initial }) {
+  const list = useStatsList("/stats/longest", 3);
+  const data = list.data || initial;
+  const items = data.items || [];
+  return (
+    <div className="section">
+      <h2 className="section-title">your longest messages</h2>
+      {items.map(m => (
+        <div key={m.rowid} className="quote-card">
+          <div className="quote-text">{m.text}</div>
+          <div className="quote-meta">
+            <span>{m.is_from_me ? "from you" : "received"} · {m.chat_name || "?"}</span>
+            <span>{fmtN(m.len)} chars · {fmtDate(m.date_unix)}</span>
+          </div>
+        </div>
+      ))}
+      <Pager {...list} total={data.total || 0} onChange={list.setOffset}/>
+    </div>
+  );
+}
+
+// ── Main app ─────────────────────────────────────────────────
+function App() {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    fetch("/stats").then(r => r.json()).then(setData).catch(e => setErr(String(e)));
+  }, []);
+
+  if (err) return <div className="loading">{err}</div>;
+  if (!data) return <div className="loading">loading stats…</div>;
+
+  const ov = data.overview;
+  const span = daysBetween(ov.first_unix, ov.last_unix);
+  const avgPerDay = span > 0 ? Math.round(ov.total_messages / span) : 0;
+  const mePct = ov.total_messages ? Math.round((ov.from_me / ov.total_messages) * 100) : 0;
+
+  const peakHour = [...data.by_hour].sort((a, b) => b.n - a.n)[0];
+  const topWeekday = [...data.by_weekday].sort((a, b) => b.n - a.n)[0];
+  const peakMonth = [...data.by_month_of_year].sort((a, b) => b.n - a.n)[0];
+
+  return (
+    <>
+      <a href="/" className="stats-back">← back to search</a>
+      <h1 className="stats-h1">Stats</h1>
+      <div className="stats-sub">
+        {fmtDate(ov.first_unix)} → {fmtDate(ov.last_unix)} · {fmtN(span)} days
+      </div>
+
+      {/* Top tiles */}
+      <div className="grid grid-4">
+        <div className="card">
+          <h3>messages</h3>
+          <div className="big">{fmtN(ov.total_messages)}</div>
+          <div className="sub">{fmtN(ov.from_me)} sent · {fmtN(ov.received)} received</div>
+        </div>
+        <div className="card">
+          <h3>conversations</h3>
+          <div className="big">{fmtN(ov.total_chats)}</div>
+          <div className="sub">{fmtN(ov.one_on_one_chats)} 1:1 · {fmtN(ov.group_chats)} groups</div>
+        </div>
+        <div className="card">
+          <h3>avg / day</h3>
+          <div className="big">{fmtN(avgPerDay)}</div>
+          <div className="sub">{mePct}% are from you</div>
+        </div>
+        <div className="card">
+          <h3>longest streak</h3>
+          <div className="big">{fmtN(data.streaks.longest)}d</div>
+          <div className="sub">{data.streaks.longest_start} → {data.streaks.longest_end}</div>
+        </div>
+      </div>
+
+      {/* Year-month timeline */}
+      <div className="section">
+        <h2 className="section-title">
+          messages over time · by month
+          <span className="legend">
+            <span><span className="legend-dot" style={{ background: "var(--bubble-in)" }}/>received</span>
+            <span><span className="legend-dot" style={{ background: "var(--accent)" }}/>from you</span>
+          </span>
+        </h2>
+        <div className="chart-card">
+          <TimelineChart buckets={data.by_month}/>
+        </div>
+      </div>
+
+      {/* Year × Month heatmap */}
+      <div className="section">
+        <h2 className="section-title">year × month heatmap</h2>
+        <div className="chart-card">
+          <YearMonthHeatmap buckets={data.by_month}/>
+        </div>
+      </div>
+
+      {/* Year + month-of-year */}
+      <div className="section grid grid-2">
+        <div>
+          <h2 className="section-title">by year</h2>
+          <div className="chart-card">
+            <SplitBarChart data={data.by_year} labels={data.by_year.map(d => d.bucket)}/>
+          </div>
+        </div>
+        <div>
+          <h2 className="section-title">by calendar month · busiest {peakMonth?.label}</h2>
+          <div className="chart-card">
+            <SplitBarChart data={data.by_month_of_year} labels={data.by_month_of_year.map(d => d.label)}/>
+          </div>
+        </div>
+      </div>
+
+      {/* Hour & weekday */}
+      <div className="section grid grid-2">
+        <div>
+          <h2 className="section-title">by hour of day · peak {peakHour?.h}:00</h2>
+          <div className="chart-card">
+            <VBarChart
+              data={data.by_hour.map(h => h.n)}
+              labels={data.by_hour.map(h => h.h % 3 === 0 ? `${h.h}` : "")}
+            />
+          </div>
+        </div>
+        <div>
+          <h2 className="section-title">by weekday · busiest {topWeekday?.label}</h2>
+          <div className="chart-card">
+            <VBarChart
+              data={data.by_weekday.map(d => d.n)}
+              labels={data.by_weekday.map(d => d.label)}
+            />
+          </div>
+        </div>
+      </div>
+
+      <TopChatsSection initial={data.top_chats}/>
+      <LopsidedSection initial={data.lopsided}/>
+      <BusiestDaysSection initial={{ items: data.busiest_days?.items || [], total: data.busiest_days?.total || 0 }}/>
+
+      {/* First messages */}
+      <div className="section">
+        <h2 className="section-title">first messages ever</h2>
+        <div className="chart-card">
+          <div className="row-list">
+            {data.first_messages.map(m => (
+              <div key={m.rowid} className="row-list-item">
+                <div className="row-list-name">
+                  <span style={{ color: "var(--ink)" }}>{m.is_from_me ? "you → " : ""}{m.chat_name || m.handle || "?"}</span>
+                  <span style={{ color: "var(--ink-3)" }}> · “{m.text.slice(0, 80).replace(/\n/g, " ")}{m.text.length > 80 ? "…" : ""}”</span>
+                </div>
+                <div className="row-list-meta">{fmtDate(m.date_unix)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <LongestMessagesSection initial={data.longest_messages}/>
+
+      <div className="section" style={{ textAlign: "center", color: "var(--ink-4)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
+        {fmtN(ov.reactions)} reactions · {fmtN(ov.with_attachments)} messages with attachments · {fmtN(ov.total_handles)} unique handles
+      </div>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
