@@ -298,8 +298,11 @@ def attachments_for(message_rowids: list[int]) -> dict[int, list[dict[str, Any]]
     Reads from the source `chat.db` (the index doesn't store attachment rows).
     Returns {message_rowid: [attachments…]}. Each attachment carries `on_disk`
     so the UI can show a "pull from iCloud" prompt without first 404-ing.
+
+    In index-only mode (no chat.db reachable) returns an empty map — callers
+    fall back to "no attachments" rather than 500.
     """
-    if not message_rowids:
+    if not message_rowids or dbmod.chat_db_path() is None:
         return {}
     import os as _os
 
@@ -341,7 +344,11 @@ def attachments_for(message_rowids: list[int]) -> dict[int, list[dict[str, Any]]
 
 
 def attachment_path(att_rowid: int) -> tuple[str, str | None, bool] | None:
-    """Look up the on-disk path + mime_type + is_sticker for an attachment ROWID."""
+    """Look up the on-disk path + mime_type + is_sticker for an attachment ROWID.
+
+    Returns None in index-only mode — the /attachment endpoint will 404."""
+    if dbmod.chat_db_path() is None:
+        return None
     src = dbmod.open_chat_db()
     row = src.execute(
         "SELECT filename, mime_type, is_sticker FROM attachment WHERE ROWID = ?",

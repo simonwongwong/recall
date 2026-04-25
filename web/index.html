@@ -8,6 +8,10 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css">
+<link rel="icon" type="image/svg+xml" href="/recall-icon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/recall-icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/recall-icon-16.png">
+<link rel="apple-touch-icon" href="/recall-icon-180.png">
 <style>
   html, body { margin: 0; padding: 0; height: 100%; background: #f0eee9; font-family: "Inter Tight", system-ui, sans-serif; }
   #root { height: 100vh; }
@@ -618,6 +622,31 @@ function ConversationPane({ targetMsg, lookupContact, query }) {
 }
 
 // ── Topbar ───────────────────────────────────────────────────
+function ModeBadge() {
+  const [caps, setCaps] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/capabilities")
+      .then(r => r.ok ? r.json() : null)
+      .then(c => { if (!cancelled) setCaps(c); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  if (!caps) return null;
+  let age = "";
+  if (caps.index_built_at) {
+    const m = Math.floor((Date.now() - new Date(caps.index_built_at).getTime()) / 60000);
+    age = m < 1 ? "now" : m < 60 ? `${m}m` : m < 1440 ? `${Math.floor(m/60)}h` : `${Math.floor(m/1440)}d`;
+  }
+  const title = `mode: ${caps.mode}\nchat_db: ${caps.chat_db || "none"}\nindex: ${caps.index_db || "missing"}\nbuilt: ${caps.index_built_at || "never"}`;
+  return (
+    <span className={"mode-badge " + caps.mode} title={title}>
+      {caps.mode === "full" ? "FULL" : "INDEX-ONLY"}
+      {age && <span className="age">{age}</span>}
+    </span>
+  );
+}
+
 function Topbar({ totalCount, onReindex, lastSync }) {
   const [reindexing, setReindexing] = useState(false);
   async function doReindex() {
@@ -638,6 +667,7 @@ function Topbar({ totalCount, onReindex, lastSync }) {
         <div className="topbar-status">
           <div className="status-dot"></div>
           <span>local · synced {lastSync || "just now"}</span>
+          <ModeBadge />
         </div>
         <a className="icon-btn" href="/stats.html" title="Stats" style={{ textDecoration: "none" }}>
           <Icon name="stats" size={14} />
@@ -1224,28 +1254,6 @@ function FacetedApp() {
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<FacetedApp />);
-</script>
-<div id="mode-badge" class="mode-badge" hidden></div>
-<script>
-  (async () => {
-    try {
-      const r = await fetch('/capabilities');
-      if (!r.ok) return;
-      const c = await r.json();
-      const el = document.getElementById('mode-badge');
-      const label = c.mode === 'full' ? 'FULL' : 'INDEX-ONLY';
-      let age = '';
-      if (c.index_built_at) {
-        const ageMs = Date.now() - new Date(c.index_built_at).getTime();
-        const m = Math.floor(ageMs / 60000);
-        age = m < 1 ? 'now' : m < 60 ? `${m}m` : m < 1440 ? `${Math.floor(m/60)}h` : `${Math.floor(m/1440)}d`;
-      }
-      el.className = 'mode-badge ' + c.mode;
-      el.innerHTML = label + (age ? ` <span class="age">${age}</span>` : '');
-      el.title = `mode: ${c.mode}\nchat_db: ${c.chat_db || 'none'}\nindex: ${c.index_db || 'missing'}\nbuilt: ${c.index_built_at || 'never'}`;
-      el.hidden = false;
-    } catch (e) { /* badge is best-effort */ }
-  })();
 </script>
 </body>
 </html>

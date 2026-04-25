@@ -624,17 +624,17 @@
   min-width: 240px;
 }
 
-/* Mode badge (top-right) — indicates whether this instance has the full
-   chat.db (Mac) or just the synced index.db (server). */
+/* Mode badge — sits inline in the topbar status row, next to "synced X".
+   Indicates whether this instance has the full chat.db (Mac) or just a
+   synced index.db (server). */
 .mode-badge {
-  position: fixed;
-  top: 8px;
-  right: 12px;
-  z-index: 100;
+  display: inline-flex;
+  align-items: center;
   font-family: var(--font-mono, "IBM Plex Mono", monospace);
   font-size: 10px;
   letter-spacing: 0.04em;
-  padding: 4px 8px;
+  padding: 2px 7px;
+  margin-left: 8px;
   border-radius: 999px;
   background: var(--surface, white);
   color: var(--ink-3, #555);
