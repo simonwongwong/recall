@@ -379,7 +379,12 @@ def sticker_stats(limit: int = 12, offset: int = 0,
 
     If `chat_ids` is set, restrict to messages in those chats (joined via
     `chat_message_join` since the sticker query reads from the source chat.db).
+
+    In index-only mode (no chat.db reachable) returns an empty result —
+    sticker rows live only in the source chat.db, not the index.
     """
+    if dbmod.chat_db_path() is None:
+        return {"items": [], "total": 0, "mode": mode}
     src = dbmod.open_chat_db()
     chat_join = ""
     chat_where = ""
