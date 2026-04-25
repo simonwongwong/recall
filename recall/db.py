@@ -15,6 +15,26 @@ INDEX_DB = DATA_DIR / "index.db"
 MAC_EPOCH_OFFSET = 978307200
 
 
+def chat_db_path() -> Path | None:
+    """Where would `open_chat_db` open from? Returns None if no candidate exists.
+    Lets callers ask "are we in full mode or index-only mode?" without raising."""
+    env = os.environ.get("RECALL_CHAT_DB")
+    if env:
+        p = Path(env).expanduser().resolve()
+        return p if p.exists() else None
+    if LIVE_CHAT_DB.exists() and os.access(LIVE_CHAT_DB, os.R_OK):
+        return LIVE_CHAT_DB
+    if SNAPSHOT_CHAT_DB.exists():
+        return SNAPSHOT_CHAT_DB
+    return None
+
+
+def index_db_path() -> Path:
+    """Where the index lives. `$RECALL_INDEX_DB` overrides default."""
+    env = os.environ.get("RECALL_INDEX_DB")
+    return Path(env).expanduser().resolve() if env else INDEX_DB
+
+
 def open_chat_db(path: Path | None = None) -> sqlite3.Connection:
     """Open the iMessage database read-only.
 

@@ -1225,5 +1225,27 @@ function FacetedApp() {
 
 ReactDOM.createRoot(document.getElementById('root')).render(<FacetedApp />);
 </script>
+<div id="mode-badge" class="mode-badge" hidden></div>
+<script>
+  (async () => {
+    try {
+      const r = await fetch('/capabilities');
+      if (!r.ok) return;
+      const c = await r.json();
+      const el = document.getElementById('mode-badge');
+      const label = c.mode === 'full' ? 'FULL' : 'INDEX-ONLY';
+      let age = '';
+      if (c.index_built_at) {
+        const ageMs = Date.now() - new Date(c.index_built_at).getTime();
+        const m = Math.floor(ageMs / 60000);
+        age = m < 1 ? 'now' : m < 60 ? `${m}m` : m < 1440 ? `${Math.floor(m/60)}h` : `${Math.floor(m/1440)}d`;
+      }
+      el.className = 'mode-badge ' + c.mode;
+      el.innerHTML = label + (age ? ` <span class="age">${age}</span>` : '');
+      el.title = `mode: ${c.mode}\nchat_db: ${c.chat_db || 'none'}\nindex: ${c.index_db || 'missing'}\nbuilt: ${c.index_built_at || 'never'}`;
+      el.hidden = false;
+    } catch (e) { /* badge is best-effort */ }
+  })();
+</script>
 </body>
 </html>

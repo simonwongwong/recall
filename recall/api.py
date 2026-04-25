@@ -16,11 +16,13 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import platform
 import subprocess
 import sys
 import tempfile
 import traceback
 from dataclasses import asdict
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -28,6 +30,32 @@ from urllib.parse import parse_qs, urlparse
 from . import db as dbmod, indexer, search, stats as stats_mod
 
 WEB_ROOT = dbmod.PROJECT_ROOT / "web"
+
+
+def _capabilities() -> dict:
+    """What modes/operations does this instance support?
+
+    `full` mode (Mac with chat.db live) supports reindex, attachments,
+    Open-in-Messages. `index-only` mode (server reading a synced index.db)
+    supports search + stats only.
+    """
+    chat_path = dbmod.chat_db_path()
+    index_path = dbmod.index_db_path()
+    index_built = None
+    if index_path.exists():
+        index_built = datetime.fromtimestamp(
+            index_path.stat().st_mtime, tz=timezone.utc
+        ).isoformat()
+    attachments_dir = Path.home() / "Library/Messages/Attachments"
+    return {
+        "mode": "full" if chat_path else "index-only",
+        "chat_db": str(chat_path) if chat_path else None,
+        "attachments": chat_path is not None and attachments_dir.exists(),
+        "open_chat": platform.system() == "Darwin",
+        "reindex": chat_path is not None,
+        "index_db": str(index_path) if index_path.exists() else None,
+        "index_built_at": index_built,
+    }
 
 
 def _bool(v: str | None) -> bool | None:
@@ -75,15 +103,25 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):  # noqa: N802
         try:
             url = urlparse(self.path)
+            caps = _capabilities()
             if url.path == "/reindex":
+                if not caps["reindex"]:
+                    self._send_json(503, {"error": "reindex unavailable in index-only mode"})
+                    return
                 stats = indexer.index_messages(verbose=False)
                 stats.update(indexer.sync_contacts(verbose=False))
                 self._send_json(200, stats)
                 return
             if url.path == "/contacts/sync":
+                if not caps["reindex"]:
+                    self._send_json(503, {"error": "contacts sync unavailable in index-only mode"})
+                    return
                 self._send_json(200, indexer.sync_contacts(verbose=False))
                 return
             if url.path == "/open-chat":
+                if not caps["open_chat"]:
+                    self._send_json(503, {"error": "open-in-Messages only available on the Mac"})
+                    return
                 length = int(self.headers.get("Content-Length") or 0)
                 body = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
                 self._open_chat(body)
@@ -99,6 +137,10 @@ class Handler(BaseHTTPRequestHandler):
 
         if url.path == "/health":
             self._send_json(200, {"ok": True})
+            return
+
+        if url.path == "/capabilities":
+            self._send_json(200, _capabilities())
             return
 
         if url.path == "/search":
