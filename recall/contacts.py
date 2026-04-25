@@ -52,7 +52,9 @@ def _full_name(first: str | None, last: str | None, nickname: str | None, org: s
 
 def _read_source(db_path: Path) -> Iterable[tuple[str, str]]:
     """Yield (handle_key, name) pairs from one AddressBook source."""
-    uri = f"file:{db_path}?mode=ro&immutable=1"
+    # `mode=ro` (no `immutable`) so SQLite reads the WAL — otherwise contacts
+    # added in the last few minutes are invisible until macOS checkpoints them.
+    uri = f"file:{db_path}?mode=ro"
     conn = sqlite3.connect(uri, uri=True)
     conn.row_factory = sqlite3.Row
     try:
