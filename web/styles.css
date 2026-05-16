@@ -962,6 +962,25 @@
 }
 .m-preset.active { background: var(--accent); color: white; border-color: var(--accent); }
 
+/* Custom date range (sheet) */
+.m-date-row {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 10px;
+}
+.m-date-input {
+  flex: 1; min-width: 0;
+  height: 38px; padding: 0 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-family: var(--font-mono); font-size: 13px;
+  color: var(--ink);
+  letter-spacing: 0;
+  -webkit-appearance: none; appearance: none;
+}
+.m-date-input:focus { border-color: var(--accent); outline: none; }
+.m-date-sep { color: var(--ink-4); font-size: 13px; }
+
 /* Toggle row */
 .m-toggle-row {
   display: flex; align-items: center; gap: 12px;

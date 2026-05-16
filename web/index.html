@@ -1309,7 +1309,9 @@ function MToggleRow({ label, icon, on, onChange }) {
   );
 }
 
-function MFilterSheet({ open, onClose, datePreset, setDatePreset, fromMe, setFromMe,
+function MFilterSheet({ open, onClose, datePreset, setDatePreset,
+                       dateRange, setDateField,
+                       fromMe, setFromMe,
                        hasAttachments, setHasAttachments, groupsOnly, setGroupsOnly,
                        showReactions, setShowReactions,
                        people, selectedContacts, togglePerson, onReset }) {
@@ -1331,6 +1333,21 @@ function MFilterSheet({ open, onClose, datePreset, setDatePreset, fromMe, setFro
                   className={"m-preset" + (datePreset === p.id ? " active" : "")}
                   onClick={() => setDatePreset(p.id)}>{p.label}</button>
               ))}
+            </div>
+            <div className="m-date-row">
+              <input
+                className="m-date-input"
+                type="date"
+                value={dateRange.from ? dateRange.from.toISOString().slice(0,10) : ""}
+                onChange={e => setDateField("from", e.target.value)}
+              />
+              <span className="m-date-sep">–</span>
+              <input
+                className="m-date-input"
+                type="date"
+                value={dateRange.to ? dateRange.to.toISOString().slice(0,10) : ""}
+                onChange={e => setDateField("to", e.target.value)}
+              />
             </div>
           </div>
 
@@ -1612,6 +1629,11 @@ function MobileApp() {
     setDatePreset(id);
     setDateRange(applyDatePreset(id));
   }
+  function setDateField(field, value) {
+    const d = value ? new Date(value + "T00:00:00") : null;
+    setDatePreset("custom");
+    setDateRange(prev => ({ ...prev, [field]: d }));
+  }
   function clearAllFilters() {
     setSelectedContacts([]); pickPreset("any");
     setFromMe(false); setHasAttachments(false); setGroupsOnly(false); setShowReactions(false);
@@ -1746,6 +1768,7 @@ function MobileApp() {
       <MFilterSheet
         open={sheetOpen} onClose={() => setSheetOpen(false)}
         datePreset={datePreset} setDatePreset={pickPreset}
+        dateRange={dateRange} setDateField={setDateField}
         fromMe={fromMe} setFromMe={setFromMe}
         hasAttachments={hasAttachments} setHasAttachments={setHasAttachments}
         groupsOnly={groupsOnly} setGroupsOnly={setGroupsOnly}
